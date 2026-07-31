@@ -1,0 +1,1821 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Control Guardería - Nicolás</title>
+
+<!-- Instalable en el celular: "Agregar a pantalla de inicio" deja un icono propio -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#2563eb">
+<meta name="description" content="Control de horas, transporte y pagos de la guardería de Nicolás.">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Guardería Nico">
+
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f5f7fa; color: #1e293b; padding: 20px; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; display: flex; align-items: center; gap: 8px; margin-bottom: 20px; }
+  h1 small { font-size: 0.875rem; color: #64748b; font-weight: 400; }
+  h2 { font-size: 1.1rem; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  h3 { font-size: 0.95rem; margin-bottom: 8px; }
+  .card { background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+
+  .form-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+  .form-group { display: flex; flex-direction: column; gap: 4px; }
+  .form-group label { font-size: 0.8rem; font-weight: 600; color: #475569; text-transform: uppercase; letter-spacing: .03em; }
+  .form-group input[type="date"],
+  .form-group input[type="time"],
+  .form-group input[type="number"],
+  .form-group input[type="text"] { padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.9rem; }
+  .form-group input[type="checkbox"] { width: 18px; height: 18px; accent-color: #3b82f6; }
+  .form-group select { padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.9rem; background: #fff; }
+
+  .btn { padding: 8px 18px; border: none; border-radius: 8px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all .15s; display: inline-flex; align-items: center; gap: 6px; }
+  .btn-primary { background: #3b82f6; color: #fff; }
+  .btn-primary:hover { background: #2563eb; }
+  .btn-success { background: #22c55e; color: #fff; }
+  .btn-success:hover { background: #16a34a; }
+  .btn-warning { background: #f59e0b; color: #fff; }
+  .btn-warning:hover { background: #d97706; }
+  .btn-danger { background: #ef4444; color: #fff; }
+  .btn-danger:hover { background: #dc2626; }
+  .btn-outline { background: transparent; border: 1px solid #cbd5e1; color: #475569; }
+  .btn-outline:hover { background: #f1f5f9; }
+  .btn-sm { padding: 5px 12px; font-size: 0.8rem; }
+  .btn-xs { padding: 2px 8px; font-size: 0.75rem; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+  .tabla-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
+  th { font-size: 0.75rem; text-transform: uppercase; color: #64748b; font-weight: 600; letter-spacing: .03em; background: #f8fafc; }
+  tr:hover td { background: #f1f5f9; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 0.75rem; font-weight: 600; }
+  .badge-si { background: #dcfce7; color: #166534; }
+  .badge-no { background: #f1f5f9; color: #64748b; }
+  .badge-pendiente { background: #fef3c7; color: #92400e; }
+  .badge-pagado { background: #dbeafe; color: #1e40af; }
+  .eliminar-btn { background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 1rem; padding: 2px 6px; border-radius: 4px; }
+  .eliminar-btn:hover { color: #ef4444; background: #fef2f2; }
+
+  .export-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .vacio { text-align: center; padding: 40px 20px; color: #94a3b8; }
+  .text-muted { color: #64748b; font-size: 0.85rem; }
+  .text-right { text-align: right; }
+  .mt-8 { margin-top: 8px; }
+  .mb-8 { margin-bottom: 8px; }
+  .flex { display: flex; }
+  .flex-wrap { flex-wrap: wrap; }
+  .gap-8 { gap: 8px; }
+  .items-center { align-items: center; }
+  .justify-between { justify-content: space-between; }
+  .w-full { width: 100%; }
+
+  select.select-sm { padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; }
+
+  /* Periodo card */
+  .periodo-card { border: 1px solid #e2e8f0; border-radius: 10px; margin-bottom: 12px; overflow: hidden; }
+  .periodo-header { padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; background: #f8fafc; cursor: pointer; }
+  .periodo-header:hover { background: #f1f5f9; }
+  .periodo-header .titulo { font-weight: 600; font-size: 0.95rem; }
+  .periodo-body { padding: 0 16px 16px; }
+  .periodo-resumen { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 8px; margin: 10px 0; }
+  .periodo-resumen-item { text-align: center; padding: 8px; background: #f8fafc; border-radius: 8px; }
+  .periodo-resumen-item .val { font-weight: 700; font-size: 1rem; }
+  .periodo-resumen-item .lbl { font-size: 0.7rem; color: #64748b; text-transform: uppercase; }
+  .periodo-dias { margin-top: 10px; }
+  .periodo-dias table { font-size: 0.85rem; }
+  .periodo-dias th { font-size: 0.7rem; }
+
+  /* Otros items */
+  .otro-item { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+  .otro-item input[type="text"] { flex: 1; min-width: 100px; }
+  .otro-item input[type="number"] { width: 120px; }
+  .btn-remove-otro { background: none; border: none; color: #94a3b8; font-size: 1.2rem; cursor: pointer; padding: 2px 6px; border-radius: 4px; }
+  .btn-remove-otro:hover { color: #ef4444; background: #fef2f2; }
+
+  /* Modal */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 1000; justify-content: center; align-items: center; }
+  .modal-overlay.active { display: flex; }
+  .modal-content { background: #fff; border-radius: 12px; padding: 24px; max-width: 420px; width: 90%; box-shadow: 0 10px 40px rgba(0,0,0,.2); }
+  .modal-content h3 { margin-bottom: 16px; font-size: 1.1rem; }
+  .modal-actions { display: flex; gap: 8px; justify-content: end; margin-top: 16px; }
+
+  .rango-custom { display: none; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+  .rango-custom.visible { display: flex; }
+  .rango-custom label { font-size: 0.8rem; font-weight: 600; color: #475569; }
+  .rango-custom input[type="date"] { padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; }
+
+  @media (max-width: 700px) {
+    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    body { padding: 12px; }
+    .card { padding: 14px; }
+    .form-row { flex-direction: column; }
+    .periodo-header { flex-direction: column; align-items: start; }
+    .otro-item { flex-wrap: wrap; }
+    .otro-item input[type="number"] { width: 100%; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>Control de Guarder&iacute;a <small>Nicol&aacute;s</small></h1>
+
+<div class="card">
+  <h2>&#x2795; Registro diario</h2>
+  <form id="formRegistro">
+    <div class="form-row">
+      <div class="form-group">
+        <label for="fecha">Fecha</label>
+        <input type="date" id="fecha" required>
+      </div>
+      <div class="form-group">
+        <label for="llegada">Hora de llegada</label>
+        <input type="time" id="llegada" required>
+      </div>
+      <div class="form-group">
+        <label for="salida">Hora de salida</label>
+        <input type="time" id="salida">
+      </div>
+      <div class="form-group">
+        <label>
+          <input type="checkbox" id="recogido" style="accent-color:#f59e0b">
+          &#x1f69c; Transporte (+&cent;1,500)
+        </label>
+      </div>
+    </div>
+    <div class="mt-8">
+      <div class="flex items-center gap-8 flex-wrap mb-8">
+        <span style="font-size:0.8rem;font-weight:600;color:#475569;">OTROS GASTOS:</span>
+        <button type="button" class="btn btn-sm btn-outline" id="btnAgregarOtro">&#x2795; Agregar</button>
+      </div>
+      <div id="otrosContainer"></div>
+    </div>
+    <div class="form-row mt-8">
+      <button type="submit" class="btn btn-primary">&#x2795; Agregar registro</button>
+      <button type="button" class="btn btn-success" id="btnRecogerAhora">&#x23f0; Recoger ahora</button>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <div class="flex items-center justify-between flex-wrap gap-8 mb-8">
+    <h2 style="margin-bottom:0;">&#x1f4ca; Per&iacute;odos</h2>
+    <div class="flex items-center gap-8 flex-wrap">
+      <label style="font-size:0.8rem;font-weight:600;color:#475569;">Tipo:</label>
+      <select id="tipoPeriodo" class="select-sm">
+        <option value="semanal">Semanal</option>
+        <option value="quincenal">Quincenal</option>
+      </select>
+      <label style="font-size:0.8rem;font-weight:600;color:#475569;">Rango:</label>
+      <select id="selectPeriodo" class="select-sm">
+        <option value="all" selected>Todo</option>
+        <option value="pending">Pendientes de pago</option>
+        <option value="custom">Personalizado</option>
+      </select>
+    </div>
+  </div>
+  <div id="rangoCustom" class="rango-custom">
+    <label>Desde:</label>
+    <input type="date" id="fechaDesde">
+    <label>Hasta:</label>
+    <input type="date" id="fechaHasta">
+    <button type="button" class="btn btn-sm btn-primary" id="btnFiltrarRango">Filtrar</button>
+  </div>
+  <div class="flex items-center gap-8 flex-wrap" style="margin-top:8px;">
+    <label style="font-size:0.8rem;font-weight:600;color:#475569;">Inicio de per&iacute;odo:</label>
+    <input type="date" id="inputFechaInicio" class="select-sm" style="padding:4px 8px;">
+    <button type="button" class="btn btn-xs btn-outline" id="btnLimpiarInicio">Auto</button>
+    <span style="font-size:0.75rem;color:#94a3b8;">(los per&iacute;odos se calculan desde esta fecha)</span>
+  </div>
+  <div id="periodosContainer"></div>
+  <div id="vacioPeriodos" class="vacio" style="display:none;">No hay per&iacute;odos para mostrar.</div>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <h2>&#x1f4b0; Saldo pendiente</h2>
+    <div id="saldoContainer" style="text-align:center;padding:10px 0;">
+      <div style="font-size:0.85rem;color:#64748b;margin-bottom:4px;">
+        Total cargos: <span id="saldoTotalCargos">&cent;0</span>
+        &nbsp;|&nbsp;
+        Pagado: <span id="saldoTotalPagado">&cent;0</span>
+      </div>
+      <div id="saldoNumero" style="font-size:2.5rem;font-weight:800;color:#dc2626;">&cent;0</div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>&#x1f4c5; Lista de eventos</h2>
+    <div class="tabla-wrap">
+      <table>
+        <thead><tr>
+          <th>Fecha</th>
+          <th>Llegada</th>
+          <th>Salida</th>
+          <th>Horas</th>
+          <th>Transporte</th>
+          <th>Gda (&cent;)</th>
+          <th>Transp (&cent;)</th>
+          <th>Otros</th>
+          <th>Total (&cent;)</th>
+          <th></th>
+        </tr></thead>
+        <tbody id="tablaEventos"></tbody>
+      </table>
+    </div>
+    <div id="vacioEventos" class="vacio" style="display:none;">No hay eventos registrados.</div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>&#x1f4dc; Hist&oacute;rico de pagos</h2>
+  <div class="tabla-wrap">
+    <table>
+      <thead><tr><th>Per&iacute;odo</th><th class="text-right">Monto</th><th class="text-right">Pagado el</th></tr></thead>
+      <tbody id="tablaHistPagos"></tbody>
+    </table>
+  </div>
+  <div id="vacioHistPagos" class="vacio" style="display:none;">No hay pagos registrados.</div>
+</div>
+
+<div class="card">
+  <h2>&#x1f4e4; Exportar / Importar</h2>
+  <div class="export-actions">
+    <button class="btn btn-outline" id="btnExportJSON">&#x1f4e5; Exportar JSON</button>
+    <label class="btn btn-outline" style="cursor:pointer;">
+      &#x1f4e4; Importar JSON
+      <input type="file" id="inputImportJSON" accept=".json" style="display:none">
+    </label>
+    <button class="btn btn-outline" id="btnExportCSV">&#x1f4c4; Descargar CSV</button>
+    <button class="btn btn-primary" id="btnGenerarReporte">&#x1f4c4; Generar reporte visual</button>
+    <button class="btn btn-outline btn-sm" id="btnLimpiarDatos" style="color:#ef4444;">&#x1f5d1; Limpiar todos los datos</button>
+  </div>
+  <hr style="margin:16px 0;border:none;border-top:1px solid #e2e8f0;">
+  <h2>&#x1f504; Sincronizar</h2>
+  <div class="flex items-center gap-8 flex-wrap">
+    <button class="btn btn-primary" id="btnAbrirSync">&#x1f504; Sincronizar</button>
+    <span id="syncStatus" style="font-size:0.85rem;color:#64748b;"></span>
+  </div>
+  <div id="syncInfoExtra" style="margin-top:6px;font-size:0.75rem;color:#94a3b8;"></div>
+</div>
+
+</div>
+
+<div class="modal-overlay" id="modalPago">
+  <div class="modal-content">
+    <h3>&#x1f4b3; Registrar pago</h3>
+    <p id="modalPeriodoInfo" class="text-muted mb-8"></p>
+    <div class="form-group mb-8">
+      <label for="modalFechaPago">Fecha de pago</label>
+      <input type="date" id="modalFechaPago">
+    </div>
+    <div class="form-group mb-8">
+      <label for="modalMonto">Monto a pagar (&cent;)</label>
+      <input type="number" id="modalMonto" min="0" step="100">
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-outline" id="modalCancelar">Cancelar</button>
+      <button type="button" class="btn btn-success" id="modalConfirmar">&#x2705; Confirmar pago</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalSync">
+  <div class="modal-content" style="max-width:500px;">
+    <h3>&#x1f504; Sincronizaci&oacute;n entre dispositivos</h3>
+    <p class="text-muted mb-8" style="font-size:0.85rem;">
+      Tus datos se guardan en la nube con un <strong>C&oacute;digo Sync</strong> &uacute;nico.
+      Ingres&aacute; ese c&oacute;digo en otros dispositivos para tener los mismos datos en todos lados.
+    </p>
+    <div id="syncBody"></div>
+<div style="margin-top:12px;">
+  <button id="btnDebugSync" class="btn btn-outline btn-sm" type="button">[?] Depuración</button>
+</div>
+<pre id="syncDebugPanel" style="display:none;margin-top:10px;background:#f8fafc;border:1px solid #cbd5e1;padding:10px;border-radius:8px;white-space:pre-wrap;font-size:12px;"></pre>
+  </div>
+</div>
+
+<script>
+const TARIFA_HORA = 1200;
+const TARIFA_RECOGIDA = 1500;
+const STORAGE_KEY = 'guarderia_nicolas';
+const KEY_PAGOS = 'guarderia_pagos_periodo';
+const KEY_TOMBSTONES = 'guarderia_tombstones';
+const KEY_CONFIG_TS = 'guarderia_config_ts';
+
+let registros = [];
+let pagosPeriodo = {};
+let modalPeriodoKey = null;
+let fechaInicio = '';
+let otrosIdx = 0;
+let configTs = 0;
+let tombstones = { registros: {}, pagos: {} };
+
+function formatearHora(h24) {
+  if (!h24) return '-';
+  const [h, m] = h24.split(':');
+  const hora = parseInt(h);
+  const ampm = hora >= 12 ? 'p. m.' : 'a. m.';
+  const h12 = hora === 0 ? 12 : hora > 12 ? hora - 12 : hora;
+  return h12 + ':' + m + ' ' + ampm;
+}
+
+function formatearMoneda(valor) {
+  return '\u00A2' + Math.round(valor).toLocaleString('es-CR');
+}
+
+function formatearFechaCorta(fechaStr) {
+  if (!fechaStr) return '-';
+  const [y, m, d] = fechaStr.split('-');
+  return d + '/' + m + '/' + y;
+}
+
+function hoyStr() {
+  return new Date().toISOString().split('T')[0];
+}
+
+function horaActualStr() {
+  const d = new Date();
+  return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+
+function calcularHorasDecimal(llegada, salida) {
+  if (!llegada || !salida) return 0;
+  const [h1, m1] = llegada.split(':').map(Number);
+  const [h2, m2] = salida.split(':').map(Number);
+  const mins = (h2 * 60 + m2) - (h1 * 60 + m1);
+  if (mins <= 0) return 0;
+  return Math.round(mins / 6) / 10;
+}
+
+function calcularCostoGuarderia(horas) {
+  return horas * TARIFA_HORA;
+}
+
+function calcularCostoRecogida(recogido) {
+  return recogido ? TARIFA_RECOGIDA : 0;
+}
+
+function obtenerPeriodo(fechaStr, tipo) {
+  var d = new Date(fechaStr + 'T12:00:00');
+  if (fechaInicio) {
+    var inicioRef = new Date(fechaInicio + 'T12:00:00');
+    var diffTime = d.getTime() - inicioRef.getTime();
+    var diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    if (diffDays >= 0) {
+      var intervalo = tipo === 'semanal' ? 7 : 15;
+      var periodNum = Math.floor(diffDays / intervalo);
+      var pInicio = new Date(inicioRef);
+      pInicio.setDate(inicioRef.getDate() + periodNum * intervalo);
+      var pFin = new Date(pInicio);
+      pFin.setDate(pInicio.getDate() + (intervalo - 1));
+      return {
+        inicio: pInicio.toISOString().split('T')[0],
+        fin: pFin.toISOString().split('T')[0],
+        label: formatearFechaCorta(pInicio.toISOString().split('T')[0]) + ' al ' + formatearFechaCorta(pFin.toISOString().split('T')[0])
+      };
+    }
+  }
+  if (tipo === 'semanal') {
+    var diaSem = d.getDay();
+    var inicio = new Date(d);
+    inicio.setDate(d.getDate() - (diaSem === 0 ? 6 : diaSem - 1));
+    var fin = new Date(inicio);
+    fin.setDate(inicio.getDate() + 6);
+    return {
+      inicio: inicio.toISOString().split('T')[0],
+      fin: fin.toISOString().split('T')[0],
+      label: formatearFechaCorta(inicio.toISOString().split('T')[0]) + ' al ' + formatearFechaCorta(fin.toISOString().split('T')[0])
+    };
+  }
+  var mes = d.getMonth();
+  var anio = d.getFullYear();
+  var dia = d.getDate();
+  if (dia <= 15) {
+    var fin15 = anio + '-' + String(mes + 1).padStart(2, '0') + '-15';
+    return {
+      inicio: anio + '-' + String(mes + 1).padStart(2, '0') + '-01',
+      fin: fin15,
+      label: '1ra quincena ' + formatearFechaCorta(fin15)
+    };
+  }
+  var ultimo = new Date(anio, mes + 1, 0).getDate();
+  var finMes = anio + '-' + String(mes + 1).padStart(2, '0') + '-' + ultimo;
+  return {
+    inicio: anio + '-' + String(mes + 1).padStart(2, '0') + '-16',
+    fin: finMes,
+    label: '2da quincena ' + formatearFechaCorta(finMes)
+  };
+}
+
+function getPeriodKey(periodo) {
+  return periodo.inicio + '|' + periodo.fin;
+}
+
+function agruparPorPeriodos(tipo, filtroPeriodo) {
+  const grupos = {};
+  for (const r of registros) {
+    const p = obtenerPeriodo(r.fecha, tipo);
+    const key = getPeriodKey(p);
+    if (!grupos[key]) grupos[key] = { periodo: p, registros: [] };
+    grupos[key].registros.push(r);
+  }
+  let entries = Object.entries(grupos);
+  if (filtroPeriodo === 'pending') {
+    entries = entries.filter(([k]) => !pagosPeriodo[k]);
+  } else if (filtroPeriodo === 'custom') {
+    const desde = document.getElementById('fechaDesde').value;
+    const hasta = document.getElementById('fechaHasta').value;
+    if (desde && hasta) {
+      entries = entries.filter(([k, g]) => g.periodo.inicio >= desde && g.periodo.fin <= hasta);
+    }
+  }
+  entries.sort((a, b) => b[1].periodo.inicio.localeCompare(a[1].periodo.inicio));
+  return entries;
+}
+
+// Storage
+function cargarDatos() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) registros = JSON.parse(raw);
+    else registros = [];
+  } catch { registros = []; }
+  console.log('[CARGA] Registros desde localStorage:', registros.length);
+  if (registros.length > 0) {
+    console.log('[CARGA] IDs localStorage:', registros.map(function(r) { return r.id || '(sin id)'; }).join(', '));
+  }
+  registros = registros.filter(r => r && r.fecha).map(function(r) {
+    if (!r.id) { r.id = Date.now() + '_' + Math.random().toString(36).slice(2, 6); console.log('[CARGA] ID generado para registro sin id:', r.id, r.fecha); }
+    r.otros = r.otros || [];
+    r.horas = calcularHorasDecimal(r.llegada, r.salida);
+    r.costoGuarderia = calcularCostoGuarderia(r.horas);
+    r.costoRecogida = calcularCostoRecogida(r.recogido);
+    var totalOtros = r.otros.reduce(function(s, o) { return s + (parseFloat(o.monto) || 0); }, 0);
+    r.total = r.costoGuarderia + r.costoRecogida + totalOtros;
+    return r;
+  });
+  console.log('[CARGA] IDs despu\u00E9s de procesar:', registros.map(function(r) { return r.id; }).join(', '));
+
+  try {
+    const raw = localStorage.getItem(KEY_PAGOS);
+    if (raw) pagosPeriodo = JSON.parse(raw);
+    else pagosPeriodo = {};
+  } catch { pagosPeriodo = {}; }
+  cargarConfig();
+  cargarTombstones();
+  sanearTombstones();
+}
+
+// ---------------------------------------------------------------------------
+// PROTECCION CONTRA BORRADO ACCIDENTAL
+// Los registros viejos no tenian el campo _ts. En la fusion se los trataba como
+// "antiquisimos" (_ts = 0), asi que CUALQUIER lapida los mataba, aunque el
+// registro estuviera vivo y visible en pantalla. Eso borro los datos del 21, 23
+// y 28 de julio. Aqui se corrige de raiz:
+//   1. Todo registro sin _ts recibe uno real (esta vivo, luego es actual).
+//   2. Si una fecha tiene registro vivo Y lapida, la lapida esta obsoleta: se va.
+// ---------------------------------------------------------------------------
+function sanearTombstones() {
+  var ahora = Date.now();
+  var cambio = false;
+
+  registros.forEach(function(r) {
+    if (!r._ts) { r._ts = ahora; cambio = true; }
+  });
+  Object.keys(pagosPeriodo || {}).forEach(function(k) {
+    if (pagosPeriodo[k] && !pagosPeriodo[k]._ts) { pagosPeriodo[k]._ts = ahora; cambio = true; }
+  });
+
+  if (!tombstones) tombstones = { registros: {}, pagos: {} };
+  if (!tombstones.registros) tombstones.registros = {};
+  if (!tombstones.pagos) tombstones.pagos = {};
+
+  registros.forEach(function(r) {
+    if (tombstones.registros[r.fecha] !== undefined) {
+      console.warn('[SANEO] Lapida obsoleta descartada para', r.fecha, '(el registro existe)');
+      delete tombstones.registros[r.fecha];
+      cambio = true;
+    }
+  });
+  Object.keys(pagosPeriodo || {}).forEach(function(k) {
+    if (tombstones.pagos[k] !== undefined) {
+      delete tombstones.pagos[k];
+      cambio = true;
+    }
+  });
+
+  if (cambio) { guardarRegistros(); guardarPagos(); guardarTombstones(); }
+}
+
+function guardarRegistros() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(registros));
+}
+
+function guardarPagos() {
+  localStorage.setItem(KEY_PAGOS, JSON.stringify(pagosPeriodo));
+}
+
+function cargarConfig() {
+  try {
+    var raw = localStorage.getItem('guarderia_config');
+    if (raw) { var cfg = JSON.parse(raw); fechaInicio = cfg.fechaInicio || ''; }
+  } catch {}
+  try {
+    var rawTs = localStorage.getItem(KEY_CONFIG_TS);
+    configTs = rawTs ? (parseInt(rawTs, 10) || 0) : 0;
+  } catch { configTs = 0; }
+}
+
+function guardarConfig() {
+  localStorage.setItem('guarderia_config', JSON.stringify({ fechaInicio: fechaInicio }));
+  localStorage.setItem(KEY_CONFIG_TS, String(configTs || 0));
+}
+
+function cargarTombstones() {
+  try {
+    var raw = localStorage.getItem(KEY_TOMBSTONES);
+    if (raw) tombstones = JSON.parse(raw);
+  } catch {}
+  if (!tombstones || typeof tombstones !== 'object') tombstones = { registros: {}, pagos: {} };
+  tombstones.registros = tombstones.registros || {};
+  tombstones.pagos = tombstones.pagos || {};
+}
+
+function guardarTombstones() {
+  localStorage.setItem(KEY_TOMBSTONES, JSON.stringify(tombstones));
+}
+
+// CRUD registros
+function agregarRegistro(r) {
+  if (!r.id) r.id = Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+  r.horas = calcularHorasDecimal(r.llegada, r.salida);
+  r.costoGuarderia = calcularCostoGuarderia(r.horas);
+  r.costoRecogida = calcularCostoRecogida(r.recogido);
+  r.otros = r.otros || [];
+  const totalOtros = r.otros.reduce((s, o) => s + (parseFloat(o.monto) || 0), 0);
+  r.total = r.costoGuarderia + r.costoRecogida + totalOtros;
+  r._ts = Date.now();
+  const idx = registros.findIndex(ex => ex.fecha === r.fecha);
+  if (idx >= 0) registros[idx] = r;
+  else registros.push(r);
+  if (tombstones.registros[r.fecha]) delete tombstones.registros[r.fecha];
+  guardarTombstones();
+  guardarRegistros();
+  if (window.renderAll) renderAll();
+  scheduleAutoSync();
+}
+
+function eliminarRegistro(fecha) {
+  registros = registros.filter(r => r.fecha !== fecha);
+  tombstones.registros[fecha] = Date.now();
+  guardarTombstones();
+  guardarRegistros();
+  renderAll();
+  scheduleAutoSync();
+}
+
+function limpiarDatos() {
+  if (!confirm('¿Estás seguro? Se borrarán TODOS los registros, pagos y configuración.')) return;
+  var ts = Date.now();
+  registros.forEach(function(r) { tombstones.registros[r.fecha] = ts; });
+  Object.keys(pagosPeriodo).forEach(function(k) { tombstones.pagos[k] = ts; });
+  registros = [];
+  pagosPeriodo = {};
+  fechaInicio = '';
+  configTs = ts;
+  guardarTombstones();
+  guardarRegistros();
+  guardarPagos();
+  guardarConfig();
+  document.getElementById('inputFechaInicio').value = '';
+  renderAll();
+  scheduleAutoSync();
+}
+
+// CRUD pagos
+function marcarPeriodoPagado(inicio, fin, fechaPago, monto) {
+  const key = inicio + '|' + fin;
+  pagosPeriodo[key] = { inicio, fin, fechaPago, monto: Math.round(monto), _ts: Date.now() };
+  if (tombstones.pagos[key]) delete tombstones.pagos[key];
+  guardarTombstones();
+  guardarPagos();
+  renderAll();
+  scheduleAutoSync();
+}
+
+function eliminarPagoPeriodo(inicio, fin) {
+  const key = inicio + '|' + fin;
+  delete pagosPeriodo[key];
+  tombstones.pagos[key] = Date.now();
+  guardarTombstones();
+  guardarPagos();
+  renderAll();
+  scheduleAutoSync();
+}
+
+// Otros gastos form
+function agregarOtroForm(desc, monto) {
+  const div = document.createElement('div');
+  div.className = 'otro-item';
+  div.innerHTML = '<input type="text" class="otro-desc" placeholder="Ej: Almuerzo" value="' + (desc || '') + '">' +
+    '<input type="number" class="otro-monto" placeholder="Monto ¢" min="0" step="100" value="' + (monto || '') + '">' +
+    '<button type="button" class="btn-remove-otro">&times;</button>';
+  div.querySelector('.btn-remove-otro').onclick = function() { div.remove(); };
+  document.getElementById('otrosContainer').appendChild(div);
+}
+
+function colectarOtros() {
+  const otros = [];
+  document.querySelectorAll('.otro-item').forEach(function(item) {
+    const desc = item.querySelector('.otro-desc').value.trim();
+    const monto = parseFloat(item.querySelector('.otro-monto').value) || 0;
+    if (desc && monto > 0) otros.push({ descripcion: desc, monto: monto });
+  });
+  return otros;
+}
+
+// Render
+function renderPeriodos() {
+  const container = document.getElementById('periodosContainer');
+  const vacio = document.getElementById('vacioPeriodos');
+  const tipo = document.getElementById('tipoPeriodo').value;
+  const filtro = document.getElementById('selectPeriodo').value;
+  const entries = agruparPorPeriodos(tipo, filtro);
+
+  if (entries.length === 0) {
+    container.innerHTML = '';
+    vacio.style.display = 'block';
+    return;
+  }
+  vacio.style.display = 'none';
+
+  container.innerHTML = entries.map(function([key, grupo]) {
+    const p = grupo.periodo;
+    const pago = pagosPeriodo[key];
+    const pagado = !!pago;
+    const rs = grupo.registros;
+    const totalDias = rs.length;
+    const totalHoras = rs.reduce((s, r) => s + (r.horas || 0), 0);
+    const totalGda = rs.reduce((s, r) => s + (r.costoGuarderia || 0), 0);
+    const totalRec = rs.reduce((s, r) => s + (r.costoRecogida || 0), 0);
+    const totalOtros = rs.reduce((s, r) => {
+      if (r.otros && r.otros.length) return s + r.otros.reduce((a, o) => a + (parseFloat(o.monto) || 0), 0);
+      return s;
+    }, 0);
+    const totalPeriodo = totalGda + totalRec + totalOtros;
+
+    const badgeHtml = pagado
+      ? '<span class="badge badge-pagado">PAGADO el ' + formatearFechaCorta(pago.fechaPago) + '</span>'
+      : '<span class="badge badge-pendiente">PENDIENTE DE PAGO</span>';
+
+    const actionHtml = pagado
+      ? '<button class="btn btn-sm btn-outline btn-eliminar-pago" data-key="' + key + '">&#x1f5d1; Quitar pago</button>'
+      : '<button class="btn btn-sm btn-warning btn-pagar" data-key="' + key + '">&#x1f4b3; Pagar per&iacute;odo</button>';
+
+    const diasHtml = rs.sort(function(a, b) { return a.fecha.localeCompare(b.fecha); }).map(function(r) {
+      const otrosStr = r.otros && r.otros.length
+        ? r.otros.map(function(o) { return o.descripcion + ' ' + formatearMoneda(o.monto); }).join(', ')
+        : '-';
+      return '<tr><td>' + formatearFechaCorta(r.fecha) + '</td>' +
+        '<td>' + formatearHora(r.llegada) + '</td>' +
+        '<td>' + (r.salida ? formatearHora(r.salida) : '-') + '</td>' +
+        '<td>' + (r.horas ? r.horas.toFixed(1) : '-') + '</td>' +
+        '<td>' + formatearMoneda(r.costoGuarderia || 0) + '</td>' +
+        '<td>' + formatearMoneda(r.costoRecogida || 0) + '</td>' +
+        '<td>' + otrosStr + '</td>' +
+        '<td><strong>' + formatearMoneda(r.total || 0) + '</strong></td></tr>';
+    }).join('');
+
+    return '<div class="periodo-card">' +
+      '<div class="periodo-header" onclick="togglePeriodo(this)">' +
+        '<div><span class="titulo">' + p.label + '</span></div>' +
+        '<div class="flex items-center gap-8 flex-wrap">' + badgeHtml + ' <span class="text-muted" style="font-size:0.8rem;">&#x25bc;</span></div>' +
+      '</div>' +
+      '<div class="periodo-body" style="display:none;">' +
+        '<div class="periodo-resumen">' +
+          '<div class="periodo-resumen-item"><div class="val">' + totalDias + '</div><div class="lbl">D&iacute;as</div></div>' +
+          '<div class="periodo-resumen-item"><div class="val">' + totalHoras.toFixed(1) + '</div><div class="lbl">Horas</div></div>' +
+          '<div class="periodo-resumen-item"><div class="val">' + formatearMoneda(totalGda) + '</div><div class="lbl">Guarder&iacute;a</div></div>' +
+          '<div class="periodo-resumen-item"><div class="val">' + formatearMoneda(totalRec) + '</div><div class="lbl">Transporte</div></div>' +
+          '<div class="periodo-resumen-item"><div class="val">' + formatearMoneda(totalOtros) + '</div><div class="lbl">Otros</div></div>' +
+          '<div class="periodo-resumen-item" style="background:#dbeafe;"><div class="val" style="color:#1d4ed8;">' + formatearMoneda(totalPeriodo) + '</div><div class="lbl">Total per&iacute;odo</div></div>' +
+        '</div>' +
+        '<div class="flex items-center gap-8 flex-wrap mb-8">' + actionHtml + '</div>' +
+        '<div class="periodo-dias">' +
+          '<table><thead><tr><th>Fecha</th><th>Llegada</th><th>Salida</th><th>Horas</th><th>Gda (&cent;)</th><th>Transp (&cent;)</th><th>Otros</th><th>Total (&cent;)</th></tr></thead>' +
+          '<tbody>' + diasHtml + '</tbody></table>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  container.querySelectorAll('.btn-pagar').forEach(function(btn) {
+    btn.addEventListener('click', function() { abrirModalPago(btn.dataset.key); });
+  });
+  container.querySelectorAll('.btn-eliminar-pago').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      const [ini, fn] = btn.dataset.key.split('|');
+      if (confirm('¿Quitar el pago de este período?')) eliminarPagoPeriodo(ini, fn);
+    });
+  });
+}
+
+function togglePeriodo(header) {
+  const body = header.nextElementSibling;
+  const arrow = header.querySelector('.text-muted');
+  if (body.style.display === 'none') {
+    body.style.display = 'block';
+    if (arrow) arrow.textContent = '\u25b2';
+  } else {
+    body.style.display = 'none';
+    if (arrow) arrow.textContent = '\u25bc';
+  }
+}
+
+function renderEventos() {
+  var tbody = document.getElementById('tablaEventos');
+  var vacio = document.getElementById('vacioEventos');
+  var sorted = [...registros].sort(function(a, b) { return b.fecha.localeCompare(a.fecha); });
+  if (sorted.length === 0) {
+    tbody.innerHTML = '';
+    vacio.style.display = 'block';
+    return;
+  }
+  vacio.style.display = 'none';
+  tbody.innerHTML = sorted.map(function(r) {
+    var otrosStr = r.otros && r.otros.length
+      ? r.otros.map(function(o) { return o.descripcion + ' ' + formatearMoneda(o.monto); }).join('<br>')
+      : '-';
+    return '<tr>' +
+      '<td>' + formatearFechaCorta(r.fecha) + '</td>' +
+      '<td>' + formatearHora(r.llegada) + '</td>' +
+      '<td>' + (r.salida ? formatearHora(r.salida) : '-') + '</td>' +
+      '<td>' + (r.horas ? r.horas.toFixed(1) : '-') + '</td>' +
+      '<td><span class="badge ' + (r.recogido ? 'badge-si' : 'badge-no') + '">' + (r.recogido ? 'S\u00ED' : 'No') + '</span></td>' +
+      '<td>' + formatearMoneda(r.costoGuarderia || 0) + '</td>' +
+      '<td>' + formatearMoneda(r.costoRecogida || 0) + '</td>' +
+      '<td>' + otrosStr + '</td>' +
+      '<td><strong>' + formatearMoneda(r.total || 0) + '</strong></td>' +
+      '<td><button class="eliminar-btn" data-fecha="' + r.fecha + '" title="Eliminar">&times;</button></td>' +
+      '</tr>';
+  }).join('');
+  tbody.querySelectorAll('.eliminar-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() { eliminarRegistro(btn.dataset.fecha); });
+  });
+}
+
+function renderSaldoPendiente() {
+  var totalCargos = registros.reduce(function(s, r) { return s + (r.total || 0); }, 0);
+  var totalPagado = 0;
+  var pagosArr = Object.values(pagosPeriodo);
+  for (var i = 0; i < pagosArr.length; i++) totalPagado += (pagosArr[i].monto || 0);
+  var saldo = totalCargos - totalPagado;
+  document.getElementById('saldoTotalCargos').textContent = formatearMoneda(totalCargos);
+  document.getElementById('saldoTotalPagado').textContent = formatearMoneda(totalPagado);
+  var el = document.getElementById('saldoNumero');
+  if (saldo <= 0) {
+    el.textContent = '\u00a1Todo al d\u00eda!';
+    el.style.color = '#16a34a';
+    el.style.fontSize = '1.8rem';
+  } else {
+    el.textContent = formatearMoneda(saldo);
+    el.style.color = '#dc2626';
+    el.style.fontSize = '2.5rem';
+  }
+}
+
+function renderHistorialPagos() {
+  const tbody = document.getElementById('tablaHistPagos');
+  const vacio = document.getElementById('vacioHistPagos');
+  const entries = Object.values(pagosPeriodo).sort(function(a, b) {
+    return b.fechaPago.localeCompare(a.fechaPago);
+  });
+  if (entries.length === 0) {
+    tbody.innerHTML = '';
+    vacio.style.display = 'block';
+    return;
+  }
+  vacio.style.display = 'none';
+  tbody.innerHTML = entries.map(function(p) {
+    return '<tr><td>' + formatearFechaCorta(p.inicio) + ' al ' + formatearFechaCorta(p.fin) + '</td>' +
+      '<td class="text-right">' + formatearMoneda(p.monto) + '</td>' +
+      '<td class="text-right">' + formatearFechaCorta(p.fechaPago) + '</td></tr>';
+  }).join('');
+}
+
+function renderAll() {
+  renderPeriodos();
+  renderEventos();
+  renderSaldoPendiente();
+  renderHistorialPagos();
+}
+
+// Modal pago
+function abrirModalPago(key) {
+  modalPeriodoKey = key;
+  const [ini, fn] = key.split('|');
+  document.getElementById('modalPeriodoInfo').textContent = 'Per\u00EDodo: ' + formatearFechaCorta(ini) + ' al ' + formatearFechaCorta(fn);
+  document.getElementById('modalFechaPago').value = hoyStr();
+  const tipo = document.getElementById('tipoPeriodo').value;
+  const entries = agruparPorPeriodos(tipo, 'all');
+  var total = 0;
+  for (var i = 0; i < entries.length; i++) {
+    if (entries[i][0] === key) {
+      var regs = entries[i][1].registros;
+      total = regs.reduce(function(s, r) { return s + (r.total || 0); }, 0);
+    }
+  }
+  document.getElementById('modalMonto').value = Math.round(total);
+  document.getElementById('modalPago').classList.add('active');
+}
+
+function cerrarModalPago() {
+  document.getElementById('modalPago').classList.remove('active');
+  modalPeriodoKey = null;
+}
+
+// Export / Import
+function exportarJSON() {
+  const data = { registros: registros, pagosPeriodo: pagosPeriodo, fechaInicio: fechaInicio };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'guarderia_nicolas.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importarJSON(file) {
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (data.registros && Array.isArray(data.registros)) {
+        if (data.pagosPeriodo && typeof data.pagosPeriodo === 'object') {
+          var tieneInicio = data.fechaInicio ? ' y fecha de inicio' : '';
+          const opcion = confirm('Se encontraron ' + data.registros.length + ' registros, ' +
+            Object.keys(data.pagosPeriodo).length + ' pagos' + tieneInicio + '.\nOK = Agregar (fusionar)\nCancel = Reemplazar todo');
+          if (opcion) {
+            for (const r of data.registros) {
+              const idx = registros.findIndex(ex => ex.fecha === r.fecha);
+              if (idx >= 0) registros[idx] = r;
+              else registros.push(r);
+            }
+            Object.assign(pagosPeriodo, data.pagosPeriodo);
+            if (data.fechaInicio && !fechaInicio) fechaInicio = data.fechaInicio;
+          } else {
+            registros = data.registros;
+            pagosPeriodo = data.pagosPeriodo;
+            fechaInicio = data.fechaInicio || '';
+          }
+          guardarRegistros();
+          guardarPagos();
+          guardarConfig();
+          document.getElementById('inputFechaInicio').value = fechaInicio;
+          renderAll();
+          sanearTombstones();   // al importar, ninguna lapida vieja debe matar lo recien traido
+          scheduleAutoSync();
+          alert('Importaci\u00F3n exitosa.');
+        } else {
+          // Legacy format (just array)
+          const val = data.registros.filter(r => r && r.fecha);
+          const opcion = confirm('Formato antiguo: ' + val.length + ' registros.\nOK = Agregar\nCancel = Reemplazar');
+          if (opcion) {
+            for (const r of val) {
+              const idx = registros.findIndex(ex => ex.fecha === r.fecha);
+              if (idx >= 0) registros[idx] = r;
+              else registros.push(r);
+            }
+          } else {
+            registros = val;
+          }
+          guardarRegistros();
+          renderAll();
+          sanearTombstones();   // al importar, ninguna lapida vieja debe matar lo recien traido
+          scheduleAutoSync();
+          alert('Importaci\u00F3n exitosa.');
+        }
+      } else if (Array.isArray(data)) {
+        const val = data.filter(r => r && r.fecha);
+        const opcion = confirm('Formato antiguo: ' + val.length + ' registros.\nOK = Agregar\nCancel = Reemplazar');
+        if (opcion) {
+          for (const r of val) {
+            const idx = registros.findIndex(ex => ex.fecha === r.fecha);
+            if (idx >= 0) registros[idx] = r;
+            else registros.push(r);
+          }
+        } else {
+          registros = val;
+        }
+        guardarRegistros();
+        renderAll();
+        sanearTombstones();   // al importar, ninguna lapida vieja debe matar lo recien traido
+        scheduleAutoSync();
+        alert('Importaci\u00F3n exitosa.');
+      } else {
+        throw new Error('Estructura no reconocida');
+      }
+    } catch(err) {
+      alert('Error al importar: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function exportarCSV() {
+  if (registros.length === 0) { alert('No hay registros.'); return; }
+  const header = 'Fecha,Llegada,Salida,Horas,Recogido,CostoGuarderia,CostoRecogida,OtrosDesc,OtrosMonto,Total\n';
+  const rows = registros.map(function(r) {
+    const otrosDesc = r.otros && r.otros.length ? r.otros.map(function(o) { return o.descripcion; }).join('; ') : '';
+    const otrosMonto = r.otros && r.otros.length ? r.otros.reduce(function(s, o) { return s + (parseFloat(o.monto) || 0); }, 0) : 0;
+    return [
+      r.fecha, r.llegada || '', r.salida || '',
+      (r.horas || 0).toFixed(1), r.recogido ? 'S\u00ED' : 'No',
+      Math.round(r.costoGuarderia || 0), Math.round(r.costoRecogida || 0),
+      '"' + otrosDesc + '"', Math.round(otrosMonto),
+      Math.round(r.total || 0)
+    ].join(',');
+  }).join('\n');
+  const bom = '\uFEFF';
+  const blob = new Blob([bom + header + rows], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'guarderia_nicolas.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function generarReporte() {
+  var tipo = document.getElementById('tipoPeriodo').value;
+  var filtro = document.getElementById('selectPeriodo').value;
+  var entries = agruparPorPeriodos(tipo, filtro);
+  if (entries.length === 0) { alert('No hay datos para generar el reporte.'); return; }
+
+  var e = entries[0];
+  var key = e[0];
+  var grupo = e[1];
+  var p = grupo.periodo;
+  var pago = pagosPeriodo[key];
+  var rs = grupo.registros;
+  var sumGda = 0, sumRec = 0, sumOtros = 0, sumTotal = 0, sumHoras = 0;
+  rs.forEach(function(r) {
+    sumGda += r.costoGuarderia || 0;
+    sumRec += r.costoRecogida || 0;
+    sumHoras += r.horas || 0;
+    if (r.otros) r.otros.forEach(function(o) { sumOtros += parseFloat(o.monto) || 0; });
+    sumTotal += r.total || 0;
+  });
+
+  var badge = pago
+    ? '<span class="badge badge-pagado">PAGADO el ' + formatearFechaCorta(pago.fechaPago) + '</span>'
+    : '<span class="badge badge-pendiente">PENDIENTE DE PAGO</span>';
+
+  var totalCargos = registros.reduce(function(s, r) { return s + (r.total || 0); }, 0);
+  var totalPagado = 0;
+  var pagosArr = Object.values(pagosPeriodo);
+  for (var i = 0; i < pagosArr.length; i++) totalPagado += (pagosArr[i].monto || 0);
+  var saldo = totalCargos - totalPagado;
+
+  var html = '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">' +
+    '<title>Reporte Guarder\u00EDa - Nicol\u00E1s</title>' +
+    '<style>' +
+    '* { margin: 0; padding: 0; box-sizing: border-box; }' +
+    'body { font-family: "Segoe UI", Arial, sans-serif; color: #1e293b; padding: 30px; max-width: 700px; margin: 0 auto; }' +
+    '.header { text-align: center; padding: 16px 0 10px; border-bottom: 3px solid #3b82f6; margin-bottom: 20px; }' +
+    '.header h1 { font-size: 1.4rem; }' +
+    '.header .sub { color: #64748b; font-size: 0.85rem; margin-top: 4px; }' +
+    '.badge { display: inline-block; padding: 3px 12px; border-radius: 99px; font-size: 0.8rem; font-weight: 700; }' +
+    '.badge-pendiente { background: #fef3c7; color: #92400e; }' +
+    '.badge-pagado { background: #dbeafe; color: #1e40af; }' +
+    '.periodo-card { border: 2px solid #e2e8f0; border-radius: 10px; margin-bottom: 20px; page-break-inside: avoid; }' +
+    '.periodo-title { padding: 12px 16px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; font-weight: 600; font-size: 1rem; }' +
+    '.periodo-body { padding: 12px 16px; }' +
+    '.resumen-row { display: flex; justify-content: space-around; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }' +
+    '.resumen-item { text-align: center; padding: 8px 14px; background: #f8fafc; border-radius: 8px; min-width: 70px; }' +
+    '.resumen-item .val { font-size: 1.1rem; font-weight: 700; }' +
+    '.resumen-item .lbl { font-size: 0.65rem; color: #64748b; text-transform: uppercase; margin-top: 2px; }' +
+    '.resumen-item.total { background: #dbeafe; }' +
+    '.resumen-item.total .val { color: #1d4ed8; }' +
+    'table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }' +
+    'th, td { padding: 6px 8px; text-align: left; border-bottom: 1px solid #e2e8f0; }' +
+    'th { font-size: 0.7rem; text-transform: uppercase; color: #64748b; background: #f8fafc; }' +
+    '.saldo-box { text-align: center; padding: 24px; border-radius: 12px; margin: 20px 0; }' +
+    '.saldo-box.pendiente { background: #fef2f2; border: 2px solid #ef4444; }' +
+    '.saldo-box.pendiente .monto { font-size: 2.8rem; font-weight: 800; color: #dc2626; }' +
+    '.saldo-box.pendiente .label { font-size: 1rem; color: #991b1b; font-weight: 600; text-transform: uppercase; margin-bottom: 4px; }' +
+    '.saldo-box.cancelado { background: #f0fdf4; border: 2px solid #22c55e; }' +
+    '.saldo-box.cancelado .monto { font-size: 2rem; font-weight: 800; color: #16a34a; }' +
+    '.saldo-box.cancelado .label { font-size: 1rem; color: #166534; font-weight: 600; text-transform: uppercase; }' +
+    '.footer { text-align: center; color: #94a3b8; font-size: 0.8rem; margin-top: 20px; }' +
+    '@media print { body { padding: 15px; } .no-print { display: none; } }' +
+    '.no-print { text-align: center; margin-bottom: 15px; }' +
+    '.no-print button { padding: 8px 20px; background: #3b82f6; color: #fff; border: none; border-radius: 6px; font-size: 0.9rem; cursor: pointer; }' +
+    '</style></head><body>' +
+    '<div class="no-print"><button onclick="window.print()">Imprimir / Guardar PDF</button></div>' +
+    '<div class="header">' +
+    '<h1>Control de Guarder\u00EDa &mdash; Nicol\u00E1s</h1>' +
+    '<div class="sub">' + p.label + ' &mdash; Generado: ' + formatearFechaCorta(hoyStr()) + '</div></div>' +
+
+    '<div class="periodo-card">' +
+    '<div class="periodo-title"><span>' + p.label + '</span>' + badge + '</div>' +
+    '<div class="periodo-body">' +
+    '<div class="resumen-row">' +
+    '<div class="resumen-item"><div class="val">' + rs.length + '</div><div class="lbl">D\u00EDas</div></div>' +
+    '<div class="resumen-item"><div class="val">' + sumHoras.toFixed(1) + '</div><div class="lbl">Horas</div></div>' +
+    '<div class="resumen-item"><div class="val">' + formatearMoneda(sumGda) + '</div><div class="lbl">Guarder\u00EDa</div></div>' +
+    '<div class="resumen-item"><div class="val">' + formatearMoneda(sumRec) + '</div><div class="lbl">Transporte</div></div>' +
+    '<div class="resumen-item"><div class="val">' + formatearMoneda(sumOtros) + '</div><div class="lbl">Otros</div></div>' +
+    '<div class="resumen-item total"><div class="val">' + formatearMoneda(sumTotal) + '</div><div class="lbl">Total</div></div>' +
+    '</div>' +
+    '<table><thead><tr><th>Fecha</th><th>Llegada</th><th>Salida</th><th>Horas</th><th>Gda (\u00A2)</th><th>Transp (\u00A2)</th><th>Otros</th><th>Total (\u00A2)</th></tr></thead><tbody>';
+  rs.sort(function(a, b) { return a.fecha.localeCompare(b.fecha); }).forEach(function(r) {
+    var otrosStr = r.otros && r.otros.length
+      ? r.otros.map(function(o) { return o.descripcion + ' ' + formatearMoneda(o.monto); }).join(', ')
+      : '-';
+    html += '<tr><td>' + formatearFechaCorta(r.fecha) + '</td>' +
+      '<td>' + formatearHora(r.llegada) + '</td>' +
+      '<td>' + (r.salida ? formatearHora(r.salida) : '-') + '</td>' +
+      '<td>' + (r.horas ? r.horas.toFixed(1) : '-') + '</td>' +
+      '<td>' + formatearMoneda(r.costoGuarderia || 0) + '</td>' +
+      '<td>' + formatearMoneda(r.costoRecogida || 0) + '</td>' +
+      '<td>' + otrosStr + '</td>' +
+      '<td>' + formatearMoneda(r.total || 0) + '</td></tr>';
+  });
+  html += '</tbody></table></div></div>' +
+
+    '<div class="saldo-box ' + (saldo > 0 ? 'pendiente' : 'cancelado') + '">' +
+    '<div class="label">' + (saldo > 0 ? 'SALDO PENDIENTE' : 'SALDO CANCELADO') + '</div>' +
+    '<div class="monto">' + (saldo > 0 ? formatearMoneda(saldo) : '\u2713 Todo al d\u00eda') + '</div>' +
+    '</div>' +
+
+    '<div class="footer">Generado: ' + formatearFechaCorta(hoyStr()) + '</div></body></html>';
+
+  var w = window.open('', '_blank');
+  w.document.write(html);
+  w.document.close();
+}
+
+// ============================================================================
+// SINCRONIZACION v3  (JSONBin + fusion por timestamp)
+// Cambios respecto a v2:
+//  1. UN SOLO "Codigo Sync" que lleva dentro la Master Key + el Bin ID.
+//     El segundo equipo pega un solo dato -> imposible crear dos bins por error.
+//  2. Sondeo adaptativo (20s -> 5min) y subida solo cuando hay cambios reales.
+//     Antes gastaba ~5.760 peticiones/dia; ahora ~100-300.
+//  3. El estado dice la verdad: si las peticiones fallan NO dice "Conectado".
+// ============================================================================
+
+var syncData = { key: '', binId: '' };
+var syncDebug = {
+  lastGetStatus: '', lastGetBytes: 0, lastGetRecords: 0,
+  lastPutStatus: '', lastPutBytes: 0, lastPutRecords: 0,
+  lastError: '', lastAction: '', puts: 0, gets: 0, skipped: 0
+};
+var autoSyncTimer = null;
+var autoSyncInterval = null;
+var autoSyncing = false;
+var autoSyncQueued = false;
+var lastAutoSyncOkAt = null;
+var syncFallosSeguidos = 0;
+var syncUltimoProblema = '';       // texto humano del ultimo problema real
+var syncPollMs = 20000;            // sondeo adaptativo
+var SYNC_POLL_MIN = 20000;
+var SYNC_POLL_MAX = 300000;
+
+// --- Codigo Sync unico: empaqueta key + binId en un solo texto ---------------
+function syncCodificar(key, binId) {
+  try { return 'GN1-' + btoa(unescape(encodeURIComponent(key + '|' + binId))); }
+  catch (e) { return ''; }
+}
+function syncDecodificar(codigo) {
+  var c = (codigo || '').trim();
+  if (c.indexOf('GN1-') !== 0) return null;
+  try {
+    var txt = decodeURIComponent(escape(atob(c.slice(4))));
+    var p = txt.split('|');
+    if (p.length !== 2 || !p[0] || !p[1]) return null;
+    return { key: p[0], binId: p[1] };
+  } catch (e) { return null; }
+}
+function syncCodigoActual() {
+  return (syncData.key && syncData.binId) ? syncCodificar(syncData.key, syncData.binId) : '';
+}
+
+function syncLoad() {
+  try { var r = localStorage.getItem('guarderia_sync'); if (r) { var c = JSON.parse(r); syncData = c; } } catch(e) {}
+}
+function syncSave() {
+  localStorage.setItem('guarderia_sync', JSON.stringify(syncData));
+}
+
+function syncConectado() { return !!(syncData.key && syncData.binId); }
+function syncSano() { return syncConectado() && syncFallosSeguidos === 0 && lastAutoSyncOkAt; }
+
+function syncStatus(txt, ok) {
+  var el = document.getElementById('syncStatus');
+  if (el) { el.textContent = txt; el.style.color = ok ? '#16a34a' : '#ef4444'; }
+  var extra = document.getElementById('syncInfoExtra');
+  if (extra) extra.textContent = syncConectado()
+    ? ('Codigo Sync guardado (abri "Sincronizar" para copiarlo)')
+    : '';
+}
+
+function syncMsg(txt, tipo) {
+  var el = document.getElementById('syncBodyMsg');
+  if (!el) return;
+  el.style.display = 'block';
+  el.textContent = txt;
+  if (tipo === 'ok') { el.style.background = '#dcfce7'; el.style.color = '#166534'; }
+  else if (tipo === 'error') { el.style.background = '#fee2e2'; el.style.color = '#991b1b'; }
+  else { el.style.background = '#e0f2fe'; el.style.color = '#075985'; }
+}
+
+// --- Traduce el codigo HTTP de JSONBin a algo que se entienda -----------------
+function syncExplicarError(status, cuerpo) {
+  if (status === 401 || status === 403) {
+    if (/limit|quota|exceed/i.test(cuerpo || '')) {
+      return 'Se agotaron las peticiones de tu cuenta JSONBin (el plan gratis da 10.000 y NO se renuevan). Entra a jsonbin.io para ver tu saldo.';
+    }
+    return 'La Master Key no es valida o no tiene permiso sobre este bin.';
+  }
+  if (status === 404) return 'El Codigo Sync no existe o fue borrado en JSONBin.';
+  if (status === 429) return 'Se agotaron las peticiones de tu cuenta JSONBin (o estas yendo muy rapido). Entra a jsonbin.io para ver tu saldo.';
+  if (status === 422) return 'JSONBin rechazo los datos (posible limite de 100kb del plan gratuito).';
+  if (status === 0)   return 'Sin internet o la conexion fue bloqueada.';
+  return 'Error ' + status + ' de JSONBin.';
+}
+
+async function syncGet(apiKey, binId) {
+  syncDebug.gets++;
+  var resp;
+  try {
+    resp = await fetch('https://api.jsonbin.io/v3/b/' + binId + '/latest?_=' + Date.now(), {
+      headers: { 'X-Master-Key': apiKey, 'X-Bin-Meta': 'true' }
+    });
+  } catch (e) {
+    syncDebug.lastGetStatus = 0;
+    throw new Error(syncExplicarError(0, ''));
+  }
+  syncDebug.lastGetStatus = resp.status;
+  if (!resp.ok) {
+    var t = ''; try { t = await resp.text(); } catch(e) {}
+    throw new Error(syncExplicarError(resp.status, t));
+  }
+  var data = await resp.json();
+  syncDebug.lastGetBytes = new Blob([JSON.stringify(data)]).size;
+  syncDebug.lastGetRecords = (data.record && data.record.registros) ? data.record.registros.length : 0;
+  return data;
+}
+
+async function syncPut(apiKey, binId, body) {
+  var resp;
+  try {
+    resp = await fetch('https://api.jsonbin.io/v3/b/' + binId, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'X-Master-Key': apiKey, 'X-Bin-Versioning': 'false' },
+      body: JSON.stringify(body)
+    });
+  } catch (e) {
+    syncDebug.lastPutStatus = 0;
+    throw new Error(syncExplicarError(0, ''));
+  }
+  syncDebug.lastPutStatus = resp.status;
+  if (!resp.ok) {
+    var t = ''; try { t = await resp.text(); } catch(e) {}
+    throw new Error(syncExplicarError(resp.status, t));
+  }
+  var data = await resp.json();
+  syncDebug.puts++;
+  syncDebug.lastPutRecords = body.registros ? body.registros.length : 0;
+  syncDebug.lastPutBytes = new Blob([JSON.stringify(body)]).size;
+  return data;
+}
+
+async function syncPost(apiKey, body) {
+  var resp;
+  try {
+    resp = await fetch('https://api.jsonbin.io/v3/b', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Master-Key': apiKey, 'X-Bin-Private': 'true', 'X-Bin-Name': 'guarderia-nico' },
+      body: JSON.stringify(body)
+    });
+  } catch (e) { throw new Error(syncExplicarError(0, '')); }
+  if (!resp.ok) {
+    var t = ''; try { t = await resp.text(); } catch(e) {}
+    throw new Error(syncExplicarError(resp.status, t));
+  }
+  return await resp.json();
+}
+
+// --- Fusion (sin cambios de logica: se conserva la de v2) --------------------
+// Cada registro/pago tiene _ts (momento de ultima modificacion). Ante un mismo
+// "id de negocio" (fecha para registros, inicio|fin para pagos) gana el mas nuevo.
+// Las eliminaciones se recuerdan con "tombstones" con su propio timestamp.
+function mergeState(local, remote) {
+  var tRegistros = {};
+  Object.keys((local.tombstones && local.tombstones.registros) || {}).forEach(function(k) {
+    tRegistros[k] = local.tombstones.registros[k];
+  });
+  Object.keys((remote.tombstones && remote.tombstones.registros) || {}).forEach(function(k) {
+    tRegistros[k] = Math.max(tRegistros[k] || 0, remote.tombstones.registros[k]);
+  });
+
+  var tPagos = {};
+  Object.keys((local.tombstones && local.tombstones.pagos) || {}).forEach(function(k) {
+    tPagos[k] = local.tombstones.pagos[k];
+  });
+  Object.keys((remote.tombstones && remote.tombstones.pagos) || {}).forEach(function(k) {
+    tPagos[k] = Math.max(tPagos[k] || 0, remote.tombstones.pagos[k]);
+  });
+
+  var regMap = {};
+  (local.registros || []).forEach(function(r) { regMap[r.fecha] = r; });
+  (remote.registros || []).forEach(function(r) {
+    var ex = regMap[r.fecha];
+    if (!ex || (r._ts || 0) > (ex._ts || 0)) regMap[r.fecha] = r;
+  });
+  var mergedRegistros = Object.keys(regMap).filter(function(fecha) {
+    var r = regMap[fecha];
+    var tomb = tRegistros[fecha];
+    // Una lapida solo mata a un registro cuyo _ts CONOCEMOS y es mas viejo.
+    // Si el registro no tiene _ts (formato antiguo) se conserva: ante la duda,
+    // preferimos un dato de mas y no perder informacion del usuario.
+    if (!tomb) return true;
+    if (!r._ts) return true;
+    return tomb < r._ts;
+  }).map(function(fecha) { return regMap[fecha]; });
+
+  var pagMap = {};
+  Object.assign(pagMap, local.pagosPeriodo || {});
+  Object.keys(remote.pagosPeriodo || {}).forEach(function(k) {
+    var r = remote.pagosPeriodo[k], ex = pagMap[k];
+    if (!ex || (r._ts || 0) > (ex._ts || 0)) pagMap[k] = r;
+  });
+  Object.keys(pagMap).forEach(function(k) {
+    var tomb = tPagos[k];
+    var p = pagMap[k];
+    if (tomb && p && p._ts && tomb >= p._ts) delete pagMap[k];
+  });
+
+  var fechaInicioM, configTsM;
+  if ((remote.configTs || 0) > (local.configTs || 0)) {
+    fechaInicioM = remote.fechaInicio; configTsM = remote.configTs;
+  } else {
+    fechaInicioM = local.fechaInicio; configTsM = local.configTs;
+  }
+
+  return {
+    registros: mergedRegistros,
+    pagosPeriodo: pagMap,
+    fechaInicio: fechaInicioM || '',
+    configTs: configTsM || 0,
+    tombstones: { registros: tRegistros, pagos: tPagos }
+  };
+}
+
+function snapshotLocal() {
+  return {
+    registros: registros,
+    pagosPeriodo: pagosPeriodo,
+    fechaInicio: fechaInicio,
+    configTs: configTs,
+    tombstones: tombstones
+  };
+}
+
+function aplicarEstado(merged) {
+  registros = merged.registros;
+  pagosPeriodo = merged.pagosPeriodo;
+  fechaInicio = merged.fechaInicio;
+  configTs = merged.configTs;
+  tombstones = merged.tombstones;
+  guardarTombstones();
+  guardarRegistros();
+  guardarPagos();
+  guardarConfig();
+  var elFecha = document.getElementById('inputFechaInicio');
+  if (elFecha) elFecha.value = fechaInicio;
+  if (window.renderAll) renderAll();
+}
+
+// Firma estable de un estado: si dos firmas son iguales, no hace falta subir.
+function syncFirma(st) {
+  if (!st) return '';
+  var regs = (st.registros || []).slice().sort(function(a, b) {
+    return (a.fecha < b.fecha) ? -1 : (a.fecha > b.fecha ? 1 : 0);
+  }).map(function(r) { return r.fecha + ':' + (r._ts || 0); }).join(',');
+  var pags = Object.keys(st.pagosPeriodo || {}).sort().map(function(k) {
+    return k + ':' + ((st.pagosPeriodo[k] && st.pagosPeriodo[k]._ts) || 0);
+  }).join(',');
+  var tr = Object.keys((st.tombstones && st.tombstones.registros) || {}).sort().map(function(k) {
+    return k + ':' + st.tombstones.registros[k];
+  }).join(',');
+  var tp = Object.keys((st.tombstones && st.tombstones.pagos) || {}).sort().map(function(k) {
+    return k + ':' + st.tombstones.pagos[k];
+  }).join(',');
+  return regs + '|' + pags + '|' + tr + '|' + tp + '|' + (st.fechaInicio || '') + '|' + (st.configTs || 0);
+}
+
+// Programa una sincronizacion (agrupa cambios seguidos en una sola)
+function scheduleAutoSync() {
+  if (!syncConectado()) return;
+  syncPollMs = SYNC_POLL_MIN;   // hubo actividad: volver a sondear rapido
+  clearTimeout(autoSyncTimer);
+  autoSyncTimer = setTimeout(function() { autoSync(); }, 1200);
+}
+
+// Baja lo remoto, fusiona, y sube SOLO si el resultado difiere de lo remoto.
+async function autoSync() {
+  if (!syncConectado()) return;
+  if (autoSyncing) { autoSyncQueued = true; return; }
+  autoSyncing = true;
+  syncDebug.lastAction = 'auto-sync ' + new Date().toLocaleTimeString();
+  syncStatus('↻ Sincronizando...', true);
+  try {
+    var remoteResp = await syncGet(syncData.key, syncData.binId);
+    var remoteRecord = remoteResp.record || {};
+    var remoteState = {
+      registros: remoteRecord.registros || [],
+      pagosPeriodo: remoteRecord.pagosPeriodo || {},
+      fechaInicio: remoteRecord.fechaInicio || '',
+      configTs: remoteRecord.configTs || 0,
+      tombstones: remoteRecord.tombstones || { registros: {}, pagos: {} }
+    };
+    var firmaRemota = syncFirma(remoteState);
+    var firmaLocalPrevia = syncFirma(snapshotLocal());
+
+    var merged = mergeState(snapshotLocal(), remoteState);
+    var firmaMerged = syncFirma(merged);
+
+    // Solo tocar el estado local si la fusion cambio algo (evita repintados)
+    if (firmaMerged !== firmaLocalPrevia) aplicarEstado(merged);
+
+    // Solo gastar un PUT si tenemos algo que la nube no tiene
+    if (firmaMerged !== firmaRemota) {
+      await syncPut(syncData.key, syncData.binId, {
+        registros: merged.registros,
+        pagosPeriodo: merged.pagosPeriodo,
+        fechaInicio: merged.fechaInicio,
+        configTs: merged.configTs,
+        tombstones: merged.tombstones
+      });
+      syncPollMs = SYNC_POLL_MIN;
+    } else {
+      syncDebug.skipped++;
+      // Nada nuevo por ningun lado -> espaciar el sondeo (ahorra peticiones)
+      if (firmaMerged === firmaLocalPrevia) {
+        syncPollMs = Math.min(Math.round(syncPollMs * 1.5), SYNC_POLL_MAX);
+      }
+    }
+
+    lastAutoSyncOkAt = new Date();
+    syncFallosSeguidos = 0;
+    syncUltimoProblema = '';
+    syncDebug.lastError = '';
+    syncStatus('✓ Sincronizado ' + lastAutoSyncOkAt.toLocaleTimeString(), true);
+    var st = document.getElementById('syncModalStatusLine');
+    if (st) st.textContent = 'Ultima sincronizacion: ' + lastAutoSyncOkAt.toLocaleTimeString();
+  } catch (e) {
+    console.error('[AUTOSYNC] Error:', e);
+    syncFallosSeguidos++;
+    syncUltimoProblema = e.message;
+    syncDebug.lastError = e.message;
+    syncStatus('⚠ ' + e.message, false);
+    syncPollMs = Math.min(Math.round(syncPollMs * 2), SYNC_POLL_MAX);
+    if (document.getElementById('modalSync') &&
+        document.getElementById('modalSync').classList.contains('active')) {
+      syncRender();
+    }
+  } finally {
+    autoSyncing = false;
+    refreshDebugPanel();
+    reprogramarPoll();
+    if (autoSyncQueued) { autoSyncQueued = false; scheduleAutoSync(); }
+  }
+}
+
+// --- Crear un Codigo Sync nuevo (SOLO el primer dispositivo) -----------------
+async function syncCreate() {
+  if (syncConectado()) {
+    alert('Este equipo YA esta conectado.\n\nSi creas otro, quedaran dos bases separadas y los datos no se compartiran.\nUsa "Ya tengo un Codigo Sync" en el otro equipo.');
+    return;
+  }
+  var key = document.getElementById('syncInputKey').value.trim();
+  if (!key) { alert('Pega tu Master Key de JSONBin.'); return; }
+
+  var btn = document.getElementById('syncBtnCreate');
+  btn.disabled = true;
+  btn.textContent = 'Creando...';
+
+  try {
+    syncMsg('Creando sincronizacion en JSONBin...', 'info');
+    var dataToSend = {
+      registros: registros, pagosPeriodo: pagosPeriodo, fechaInicio: fechaInicio,
+      configTs: configTs, tombstones: tombstones
+    };
+    var postResp = await syncPost(key, dataToSend);
+    var binId = postResp.metadata.id;
+
+    var getResp = await syncGet(key, binId);
+    var d = getResp.record;
+    if (!d || !d.registros || d.registros.length !== registros.length) {
+      throw new Error('El bin se creo pero la verificacion fallo');
+    }
+
+    syncData = { key: key, binId: binId };
+    syncSave();
+    syncFallosSeguidos = 0;
+    lastAutoSyncOkAt = new Date();
+    syncStatus('✓ Sync creado', true);
+    syncRender();
+    startAutoSyncLoop();
+  } catch (e) {
+    console.error('[SYNC] Error al crear:', e);
+    syncMsg('✖ ' + e.message, 'error');
+    btn.disabled = false;
+    btn.textContent = 'Crear Sync';
+  }
+}
+
+// --- Conectar pegando UN SOLO Codigo Sync (fusiona, no pisa) -----------------
+async function syncConnect() {
+  var codigo = document.getElementById('syncInputCode').value.trim();
+  if (!codigo) { alert('Pega el Codigo Sync que te muestra el otro equipo.'); return; }
+
+  var cred = syncDecodificar(codigo);
+  if (!cred) {
+    // Compatibilidad con la version vieja: Master Key + Bin ID por separado
+    var k2 = document.getElementById('syncInputKey2');
+    var caja = document.getElementById('syncCajaKeyVieja');
+    if (k2 && k2.value.trim()) {
+      cred = { key: k2.value.trim(), binId: codigo };
+    } else if (/^[a-f0-9]{20,30}$/i.test(codigo)) {
+      // Parece un Bin ID valido: solo falta la Master Key
+      if (caja) caja.style.display = 'block';
+      if (k2) k2.focus();
+      syncMsg('Ese es un Bin ID del formato viejo. Falta tu MASTER KEY en el recuadro amarillo de abajo.', 'error');
+      return;
+    } else {
+      syncMsg('Ese codigo no sirve. Debe empezar con "GN1-" (lo copias del otro equipo con "Copiar codigo") o ser un Bin ID de JSONBin.', 'error');
+      return;
+    }
+  }
+
+  var btn = document.getElementById('syncBtnConnect');
+  btn.disabled = true;
+  btn.textContent = 'Conectando...';
+
+  try {
+    syncMsg('Verificando y fusionando datos...', 'info');
+    var getResp = await syncGet(cred.key, cred.binId);
+    var d = getResp.record;
+    if (!d || !d.registros) throw new Error('Ese codigo no contiene datos validos de la guarderia.');
+
+    syncData = { key: cred.key, binId: cred.binId };
+    syncSave();
+
+    var remoteState = {
+      registros: d.registros || [],
+      pagosPeriodo: d.pagosPeriodo || {},
+      fechaInicio: d.fechaInicio || '',
+      configTs: d.configTs || 0,
+      tombstones: d.tombstones || { registros: {}, pagos: {} }
+    };
+    // Fusiona lo local con lo de la nube (no se pierde nada de ningun lado)
+    var merged = mergeState(snapshotLocal(), remoteState);
+    aplicarEstado(merged);
+    if (syncFirma(merged) !== syncFirma(remoteState)) {
+      await syncPut(cred.key, cred.binId, {
+        registros: merged.registros, pagosPeriodo: merged.pagosPeriodo,
+        fechaInicio: merged.fechaInicio, configTs: merged.configTs, tombstones: merged.tombstones
+      });
+    }
+
+    syncFallosSeguidos = 0;
+    syncUltimoProblema = '';
+    lastAutoSyncOkAt = new Date();
+    syncStatus('✓ Conectado', true);
+    syncRender();
+    syncMsg('✓ Conectado y sincronizado (' + merged.registros.length + ' registros)', 'ok');
+    startAutoSyncLoop();
+  } catch (e) {
+    console.error('[SYNC] Error al conectar:', e);
+    syncData = { key: '', binId: '' };
+    syncSave();
+    syncMsg('✖ ' + e.message, 'error');
+    btn.disabled = false;
+    btn.textContent = 'Conectar';
+  }
+}
+
+function syncCopiarCodigo() {
+  var cod = syncCodigoActual();
+  if (!cod) return;
+  var ok = function() {
+    var b = document.getElementById('syncBtnCopiar');
+    if (b) { b.textContent = '✓ Copiado'; setTimeout(function(){ b.textContent = '⧉ Copiar codigo'; }, 1800); }
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(cod).then(ok, function() { prompt('Copia este codigo:', cod); });
+  } else {
+    prompt('Copia este codigo:', cod);
+  }
+}
+
+// --- Render del modal --------------------------------------------------------
+function syncRender() {
+  var b = document.getElementById('syncBody');
+  if (!b) return;
+  b.innerHTML = '<div id="syncBodyMsg" style="display:none;padding:8px 12px;border-radius:6px;font-size:0.85rem;font-weight:600;text-align:center;margin-bottom:8px;"></div>';
+
+  if (syncConectado()) {
+    var fallando = syncFallosSeguidos > 0;
+    var cod = syncCodigoActual();
+    var ultima = lastAutoSyncOkAt
+      ? ('Ultima sincronizacion correcta: ' + lastAutoSyncOkAt.toLocaleTimeString())
+      : 'Todavia no se completo ninguna sincronizacion.';
+
+    var cabecera = fallando
+      ? '<div style="font-size:0.95rem;color:#b91c1c;font-weight:700;margin-bottom:6px;">⚠ Conectado, pero la sincronizacion esta FALLANDO</div>' +
+        '<div style="font-size:0.85rem;color:#991b1b;background:#fee2e2;border-radius:6px;padding:8px;margin-bottom:10px;text-align:left;">' +
+        syncUltimoProblema + '<br><span style="color:#7f1d1d;">Intentos fallidos seguidos: ' + syncFallosSeguidos + '</span></div>'
+      : '<div style="font-size:0.95rem;color:#16a34a;font-weight:700;margin-bottom:8px;">✓ Conectado y funcionando</div>';
+
+    b.innerHTML += '<div style="text-align:center;padding:8px 0;">' +
+      cabecera +
+      '<div style="font-size:0.8rem;color:#475569;margin-bottom:4px;">Tu Codigo Sync (pegalo en el otro equipo):</div>' +
+      '<div style="font-family:monospace;font-size:0.75rem;word-break:break-all;background:#f1f5f9;border:1px solid #cbd5e1;border-radius:6px;padding:8px;margin-bottom:6px;">' + cod + '</div>' +
+      '<button class="btn btn-outline btn-sm" id="syncBtnCopiar" style="margin-bottom:10px;">⧉ Copiar codigo</button>' +
+      '<div id="syncModalStatusLine" style="font-size:0.75rem;color:#94a3b8;margin-bottom:10px;">' + ultima + '</div>' +
+      '<div style="font-size:0.75rem;color:#64748b;background:#f8fafc;border-radius:6px;padding:8px;margin-bottom:12px;text-align:left;">' +
+      'No hace falta apretar nada: al agregar, editar o borrar se sube solo. Ademas revisa cada ' +
+      Math.round(syncPollMs / 1000) + 's (se espacia solo hasta 5 min si no hay cambios, para no gastar peticiones de JSONBin).' +
+      '</div>' +
+      '<button class="btn btn-primary" id="syncBtnForce" style="margin-bottom:6px;">↻ Sincronizar ahora</button>' +
+      '<br><button class="btn btn-outline btn-sm" id="syncBtnReset" style="color:#ef4444;margin-top:4px;">✖ Desconectar este equipo</button>' +
+      '</div>';
+
+    document.getElementById('syncBtnCopiar').onclick = syncCopiarCodigo;
+    document.getElementById('syncBtnForce').onclick = function() { syncPollMs = SYNC_POLL_MIN; autoSync(); };
+    document.getElementById('syncBtnReset').onclick = function() {
+      if (confirm('¿Desconectar? Los datos locales no se borran, pero dejaran de compartirse hasta que te reconectes.')) {
+        stopAutoSyncLoop();
+        syncData = { key: '', binId: '' }; syncSave();
+        syncFallosSeguidos = 0; syncUltimoProblema = ''; lastAutoSyncOkAt = null;
+        syncStatus('', true); syncRender();
+      }
+    };
+  } else {
+    b.innerHTML +=
+      '<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px;margin-bottom:14px;font-size:0.82rem;color:#1e3a8a;text-align:left;">' +
+      '<strong>¿Primera vez?</strong> Configura <strong>UN</strong> equipo con la opcion A. Despues, en los demas equipos usa la opcion B pegando el codigo. ' +
+      'Nunca uses la opcion A dos veces: crearias dos bases separadas.' +
+      '</div>' +
+
+      '<p style="font-size:0.9rem;font-weight:700;margin-bottom:8px;">B) Ya tengo un Codigo Sync (lo mas comun)</p>' +
+      '<div class="form-group mb-8">' +
+      '<label>Pega aqui el codigo que te muestra el otro equipo</label>' +
+      '<input type="text" id="syncInputCode" placeholder="GN1-..." style="width:100%;margin-top:4px;">' +
+      '</div>' +
+      '<div id="syncCajaKeyVieja" style="display:none;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:10px;margin-bottom:10px;">' +
+      '<div style="font-size:0.78rem;color:#92400e;margin-bottom:6px;">' +
+      'Eso es un <strong>Bin ID</strong> (formato viejo). Necesito tambien tu Master Key para poder entrar:' +
+      '</div>' +
+      '<input type="password" id="syncInputKey2" placeholder="Master Key de JSONBin" style="width:100%;">' +
+      '<div style="font-size:0.72rem;color:#a16207;margin-top:4px;">' +
+      'La sacas de jsonbin.io &rarr; menu API KEYS' +
+      '</div>' +
+      '</div>' +
+      '<button class="btn btn-primary" id="syncBtnConnect">Conectar</button>' +
+
+      '<div style="margin-top:16px;padding-top:14px;border-top:1px solid #e2e8f0;">' +
+      '<p style="font-size:0.9rem;font-weight:700;margin-bottom:8px;">A) Configurar el primer equipo</p>' +
+      '<div class="form-group mb-8">' +
+      '<label>1. Crea una cuenta gratis en <a href="https://jsonbin.io" target="_blank">jsonbin.io</a></label>' +
+      '</div>' +
+      '<div class="form-group mb-8">' +
+      '<label>2. Copia tu <strong>Master Key</strong> desde el panel de JSONBin</label>' +
+      '<input type="password" id="syncInputKey" placeholder="Tu Master Key de JSONBin" style="width:100%;margin-top:4px;">' +
+      '</div>' +
+      '<button class="btn btn-outline" id="syncBtnCreate">Crear Sync</button>' +
+      '</div>';
+
+    document.getElementById('syncBtnCreate').onclick = syncCreate;
+    document.getElementById('syncBtnConnect').onclick = syncConnect;
+
+    // Si lo pegado parece un Bin ID viejo, mostramos el campo de Master Key solo.
+    var campoCod = document.getElementById('syncInputCode');
+    var revisarFormato = function() {
+      var v = campoCod.value.trim();
+      var esViejo = v.length > 0 && v.indexOf('GN1-') !== 0;
+      document.getElementById('syncCajaKeyVieja').style.display = esViejo ? 'block' : 'none';
+    };
+    campoCod.addEventListener('input', revisarFormato);
+    campoCod.addEventListener('paste', function() { setTimeout(revisarFormato, 0); });
+  }
+}
+
+function abrirModalSync() {
+  syncRender();
+  document.getElementById('modalSync').classList.add('active');
+}
+
+function cerrarModalSync() {
+  document.getElementById('modalSync').classList.remove('active');
+}
+
+// --- Sondeo adaptativo -------------------------------------------------------
+function reprogramarPoll() {
+  if (autoSyncInterval) { clearTimeout(autoSyncInterval); autoSyncInterval = null; }
+  if (!syncConectado()) return;
+  if (document.visibilityState === 'hidden') return;  // no gastar peticiones en segundo plano
+  autoSyncInterval = setTimeout(function() { autoSync(); }, syncPollMs);
+}
+
+function startAutoSyncLoop() {
+  stopAutoSyncLoop();
+  reprogramarPoll();
+  document.addEventListener('visibilitychange', onVisibilityAutoSync);
+  window.addEventListener('focus', onFocusAutoSync);
+  autoSync();
+}
+
+function stopAutoSyncLoop() {
+  if (autoSyncInterval) { clearTimeout(autoSyncInterval); autoSyncInterval = null; }
+  document.removeEventListener('visibilitychange', onVisibilityAutoSync);
+  window.removeEventListener('focus', onFocusAutoSync);
+}
+
+function onVisibilityAutoSync() {
+  if (document.visibilityState === 'visible') { syncPollMs = SYNC_POLL_MIN; autoSync(); }
+  else { if (autoSyncInterval) { clearTimeout(autoSyncInterval); autoSyncInterval = null; } }
+}
+
+function onFocusAutoSync() {
+  syncPollMs = SYNC_POLL_MIN;
+  autoSync();
+}
+
+function refreshDebugPanel() {
+  var p = document.getElementById('syncDebugPanel');
+  if (!p) return;
+  if (p.style.display !== 'block') return;
+  var localBytes = new Blob([JSON.stringify({ registros: registros, pagosPeriodo: pagosPeriodo, fechaInicio: fechaInicio })]).size;
+  p.textContent =
+    'CODIGO SYNC: ' + (syncCodigoActual() || '(sin conectar)') + '\n' +
+    'BIN ID: ' + (syncData.binId || '(sin conectar)') + '\n' +
+    'Estado real: ' + (syncConectado() ? (syncFallosSeguidos === 0 ? 'OK' : 'FALLANDO (' + syncFallosSeguidos + ' seguidos)') : 'sin conectar') + '\n' +
+    'Sondeo actual: cada ' + Math.round(syncPollMs / 1000) + 's\n' +
+    'Registros locales: ' + registros.length + '\n' +
+    'Pagos registrados: ' + Object.keys(pagosPeriodo).length + '\n' +
+    'Fecha inicio: ' + (fechaInicio || '-') + '\n' +
+    'JSON local: ' + localBytes + ' bytes' + (localBytes > 90000 ? '  ⚠ cerca del limite de 100kb del plan gratis' : '') + '\n' +
+    '---\n' +
+    'Peticiones esta sesion: ' + syncDebug.gets + ' GET / ' + syncDebug.puts + ' PUT (' + syncDebug.skipped + ' subidas evitadas)\n' +
+    'Ult GET: ' + syncDebug.lastGetStatus + ' (' + syncDebug.lastGetRecords + ' regs)\n' +
+    'Ult PUT: ' + syncDebug.lastPutStatus + ' (' + syncDebug.lastPutRecords + ' regs, ' + syncDebug.lastPutBytes + ' bytes)\n' +
+    'Ult accion: ' + syncDebug.lastAction + '\n' +
+    'Ult error: ' + (syncDebug.lastError || '(ninguno)') + '\n' +
+    '---\n' +
+    'Fechas locales: ' + registros.map(function(r) { return r.fecha; }).slice(0, 10).join(', ') + (registros.length > 10 ? '...' : '');
+}
+
+// Init
+document.addEventListener('DOMContentLoaded', function() {
+  cargarDatos();
+
+  document.getElementById('fecha').value = hoyStr();
+  document.getElementById('llegada').value = '07:30';
+
+  document.getElementById('formRegistro').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const fecha = document.getElementById('fecha').value;
+    const llegada = document.getElementById('llegada').value;
+    const salida = document.getElementById('salida').value || null;
+    const recogido = document.getElementById('recogido').checked;
+    const otros = colectarOtros();
+    if (!fecha || !llegada) { alert('Completa la fecha y hora de llegada.'); return; }
+    agregarRegistro({ fecha: fecha, llegada: llegada, salida: salida, recogido: recogido, otros: otros });
+    document.getElementById('fecha').value = hoyStr();
+    document.getElementById('llegada').value = '07:30';
+    document.getElementById('salida').value = '';
+    document.getElementById('recogido').checked = false;
+    document.getElementById('otrosContainer').innerHTML = '';
+  });
+
+  document.getElementById('btnRecogerAhora').addEventListener('click', function() {
+    const fecha = document.getElementById('fecha').value || hoyStr();
+    const llegada = document.getElementById('llegada').value;
+    if (!llegada) { alert('Primero ingresa la hora de llegada.'); return; }
+    const otros = colectarOtros();
+    agregarRegistro({ fecha: fecha, llegada: llegada, salida: horaActualStr(), recogido: true, otros: otros });
+    document.getElementById('fecha').value = hoyStr();
+    document.getElementById('llegada').value = '07:30';
+    document.getElementById('salida').value = '';
+    document.getElementById('recogido').checked = false;
+    document.getElementById('otrosContainer').innerHTML = '';
+  });
+
+  document.getElementById('btnAgregarOtro').addEventListener('click', function() {
+    agregarOtroForm('', '');
+  });
+
+  document.getElementById('tipoPeriodo').addEventListener('change', renderAll);
+
+  document.getElementById('selectPeriodo').addEventListener('change', function() {
+    const rango = document.getElementById('rangoCustom');
+    if (this.value === 'custom') {
+      rango.classList.add('visible');
+      const hoy = new Date();
+      const primerDia = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+      document.getElementById('fechaDesde').value = primerDia.toISOString().split('T')[0];
+      document.getElementById('fechaHasta').value = hoyStr();
+    } else {
+      rango.classList.remove('visible');
+    }
+    renderAll();
+  });
+
+  document.getElementById('btnFiltrarRango').addEventListener('click', renderAll);
+
+  document.getElementById('inputFechaInicio').value = fechaInicio;
+  document.getElementById('inputFechaInicio').addEventListener('change', function() {
+    fechaInicio = this.value;
+    configTs = Date.now();
+    guardarConfig();
+    renderAll();
+    scheduleAutoSync();
+  });
+  document.getElementById('btnLimpiarInicio').addEventListener('click', function() {
+    fechaInicio = '';
+    document.getElementById('inputFechaInicio').value = '';
+    configTs = Date.now();
+    guardarConfig();
+    renderAll();
+    scheduleAutoSync();
+  });
+
+  document.getElementById('modalConfirmar').addEventListener('click', function() {
+    if (!modalPeriodoKey) return;
+    const [ini, fn] = modalPeriodoKey.split('|');
+    const fechaPago = document.getElementById('modalFechaPago').value;
+    const monto = parseFloat(document.getElementById('modalMonto').value) || 0;
+    if (!fechaPago || monto <= 0) { alert('Completa la fecha y el monto.'); return; }
+    marcarPeriodoPagado(ini, fn, fechaPago, monto);
+    cerrarModalPago();
+  });
+
+  document.getElementById('modalCancelar').addEventListener('click', cerrarModalPago);
+
+  document.getElementById('modalPago').addEventListener('click', function(e) {
+    if (e.target === this) cerrarModalPago();
+  });
+
+  document.getElementById('btnExportJSON').addEventListener('click', exportarJSON);
+  document.getElementById('inputImportJSON').addEventListener('change', function(e) {
+    if (e.target.files.length > 0) importarJSON(e.target.files[0]);
+    e.target.value = '';
+  });
+  document.getElementById('btnExportCSV').addEventListener('click', exportarCSV);
+  document.getElementById('btnGenerarReporte').addEventListener('click', generarReporte);
+  document.getElementById('btnLimpiarDatos').addEventListener('click', limpiarDatos);
+
+  syncLoad();
+
+document.addEventListener('click', function(e) {
+  if (e.target && e.target.id === 'btnDebugSync') {
+    var p = document.getElementById('syncDebugPanel');
+    if (!p) return;
+    if (p.style.display === 'block') p.style.display = 'none';
+    else { p.style.display = 'block'; refreshDebugPanel(); }
+  }
+});
+
+  if (syncData.key && syncData.binId) {
+    // No decimos "Conectado" hasta que una peticion real funcione.
+    syncStatus('\u21bb Verificando sincronizacion...', true);
+    startAutoSyncLoop();   // startAutoSyncLoop ya dispara un autoSync inmediato
+  }
+
+  document.getElementById('btnAbrirSync').addEventListener('click', abrirModalSync);
+  document.getElementById('modalSync').addEventListener('click', function(e) {
+    if (e.target === this) cerrarModalSync();
+  });
+
+  renderAll();
+});
+</script>
+</body>
+</html>
