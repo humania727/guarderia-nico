@@ -227,6 +227,7 @@
           <th>Transp (&cent;)</th>
           <th>Otros</th>
           <th>Total (&cent;)</th>
+          <th>Anot&oacute;</th>
           <th></th>
         </tr></thead>
         <tbody id="tablaEventos"></tbody>
@@ -289,12 +290,25 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="modalNombre">
+  <div class="modal-content" style="max-width:400px;">
+    <h3>&#x1f44b; &iquest;C&oacute;mo te llam&aacute;s?</h3>
+    <p class="text-muted mb-8" style="font-size:0.85rem;">
+      Se usa para saber qui&eacute;n anot&oacute; cada registro. Solo se pregunta una vez en este equipo.
+    </p>
+    <input type="text" id="inputNombreUsuario" placeholder="Tu nombre" maxlength="24" style="width:100%;">
+    <div class="modal-actions" style="margin-top:12px;">
+      <button type="button" class="btn btn-primary" id="btnConfirmarNombre">Listo</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modalSync">
   <div class="modal-content" style="max-width:500px;">
-    <h3>&#x1f504; Sincronizaci&oacute;n entre dispositivos</h3>
+    <h3>&#x1f504; Compartir entre celulares</h3>
     <p class="text-muted mb-8" style="font-size:0.85rem;">
-      Tus datos se guardan en la nube con un <strong>C&oacute;digo Sync</strong> &uacute;nico.
-      Ingres&aacute; ese c&oacute;digo en otros dispositivos para tener los mismos datos en todos lados.
+      Pas&aacute; el enlace a quien deba anotar las horas. Todos ven y registran lo mismo,
+      al instante, y queda constancia de qui&eacute;n anot&oacute; cada cosa.
     </p>
     <div id="syncBody"></div>
 <div style="margin-top:12px;">
@@ -303,6 +317,10 @@
 <pre id="syncDebugPanel" style="display:none;margin-top:10px;background:#f8fafc;border:1px solid #cbd5e1;padding:10px;border-radius:8px;white-space:pre-wrap;font-size:12px;"></pre>
   </div>
 </div>
+
+<!-- Firebase: sincronizacion en tiempo real entre equipos -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 
 <script>
 const TARIFA_HORA = 1200;
@@ -566,8 +584,15 @@ function agregarRegistro(r) {
   r.total = r.costoGuarderia + r.costoRecogida + totalOtros;
   r._ts = Date.now();
   const idx = registros.findIndex(ex => ex.fecha === r.fecha);
-  if (idx >= 0) registros[idx] = r;
-  else registros.push(r);
+  var quien = (typeof nombreUsuario === 'function' ? nombreUsuario() : '') || '';
+  if (idx >= 0) {
+    r.autor = registros[idx].autor || quien;       // quien lo creo se conserva
+    if (quien) r.editadoPor = quien;               // quien lo toco de ultimo
+    registros[idx] = r;
+  } else {
+    if (quien) { r.autor = quien; r.editadoPor = quien; }
+    registros.push(r);
+  }
   if (tombstones.registros[r.fecha]) delete tombstones.registros[r.fecha];
   guardarTombstones();
   guardarRegistros();
@@ -742,6 +767,25 @@ function togglePeriodo(header) {
   }
 }
 
+// Muestra quien anoto el registro, y si otro lo edito despues.
+function firmaAutor(r) {
+  var a = (r.autor || '').trim();
+  var e = (r.editadoPor || '').trim();
+  if (!a && !e) return '<span style="color:#cbd5e1;">-</span>';
+  if (!a) a = e;
+  var txt = '<span style="font-size:0.78rem;">' + escaparHtml(a) + '</span>';
+  if (e && e !== a) {
+    txt += '<br><span style="font-size:0.7rem;color:#94a3b8;" title="Modificado despues por ' +
+           escaparHtml(e) + '">editado: ' + escaparHtml(e) + '</span>';
+  }
+  return txt;
+}
+function escaparHtml(s) {
+  return String(s).replace(/[&<>"']/g, function(c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
 function renderEventos() {
   var tbody = document.getElementById('tablaEventos');
   var vacio = document.getElementById('vacioEventos');
@@ -766,6 +810,7 @@ function renderEventos() {
       '<td>' + formatearMoneda(r.costoRecogida || 0) + '</td>' +
       '<td>' + otrosStr + '</td>' +
       '<td><strong>' + formatearMoneda(r.total || 0) + '</strong></td>' +
+      '<td>' + firmaAutor(r) + '</td>' +
       '<td><button class="eliminar-btn" data-fecha="' + r.fecha + '" title="Eliminar">&times;</button></td>' +
       '</tr>';
   }).join('');
@@ -1068,161 +1113,269 @@ function generarReporte() {
 }
 
 // ============================================================================
-// SINCRONIZACION v3  (JSONBin + fusion por timestamp)
-// Cambios respecto a v2:
-//  1. UN SOLO "Codigo Sync" que lleva dentro la Master Key + el Bin ID.
-//     El segundo equipo pega un solo dato -> imposible crear dos bins por error.
-//  2. Sondeo adaptativo (20s -> 5min) y subida solo cuando hay cambios reales.
-//     Antes gastaba ~5.760 peticiones/dia; ahora ~100-300.
-//  3. El estado dice la verdad: si las peticiones fallan NO dice "Conectado".
+// SINCRONIZACION v4  (Firebase Realtime Database)
+// Reemplaza a JSONBin, que daba 10.000 peticiones que NO se renovaban.
+// Firebase plan Spark: 10 GB de descarga POR MES, sin tope de peticiones.
+//
+//  1. La "sala" viaja en el enlace (...#codigo). Se comparte por WhatsApp y
+//     el otro equipo queda conectado con solo abrirlo. Nada que pegar.
+//  2. Tiempo real: Firebase avisa al instante cuando otro equipo cambia algo.
+//     No hay sondeo, no se gastan peticiones esperando.
+//  3. Cada registro guarda quien lo creo y quien lo edito de ultimo.
+//  4. La fusion (mergeState) es la misma de v3, ya probada.
 // ============================================================================
 
-var syncData = { key: '', binId: '' };
-var syncDebug = {
-  lastGetStatus: '', lastGetBytes: 0, lastGetRecords: 0,
-  lastPutStatus: '', lastPutBytes: 0, lastPutRecords: 0,
-  lastError: '', lastAction: '', puts: 0, gets: 0, skipped: 0
+var FB_CONFIG = {
+  apiKey: "AIzaSyCLw-8OhS8RPxfuvuK8IgYzfMNHLTLvrVU",
+  authDomain: "guarderia-nico.firebaseapp.com",
+  databaseURL: "https://guarderia-nico-default-rtdb.firebaseio.com",
+  projectId: "guarderia-nico",
+  storageBucket: "guarderia-nico.firebasestorage.app",
+  messagingSenderId: "37836622583",
+  appId: "1:37836622583:web:011b2ab6b482c64efea1f2"
 };
+
+var SALA_MIN = 16;
+var SALA_ABC = 'abcdefghijkmnpqrstuvwxyz23456789';
+
+var fbApp = null, fbDb = null, fbRef = null;
+var salaId = '';
+var aplicandoRemoto = false;
+var subiendo = false;
 var autoSyncTimer = null;
-var autoSyncInterval = null;
-var autoSyncing = false;
-var autoSyncQueued = false;
-var lastAutoSyncOkAt = null;
-var syncFallosSeguidos = 0;
-var syncUltimoProblema = '';       // texto humano del ultimo problema real
-var syncPollMs = 20000;            // sondeo adaptativo
-var SYNC_POLL_MIN = 20000;
-var SYNC_POLL_MAX = 300000;
+var ultimaFirmaRemota = null;
+var lastSyncOkAt = null;
+var syncProblema = '';
+var fbOnline = false;
+var syncDebug = { lecturas: 0, escrituras: 0, evitadas: 0, ultAccion: '', ultError: '' };
 
-// --- Codigo Sync unico: empaqueta key + binId en un solo texto ---------------
-function syncCodificar(key, binId) {
-  try { return 'GN1-' + btoa(unescape(encodeURIComponent(key + '|' + binId))); }
-  catch (e) { return ''; }
+// --- Nombre de quien usa este equipo ----------------------------------------
+function nombreUsuario() {
+  return (localStorage.getItem('guarderia_nombre') || '').trim();
 }
-function syncDecodificar(codigo) {
-  var c = (codigo || '').trim();
-  if (c.indexOf('GN1-') !== 0) return null;
-  try {
-    var txt = decodeURIComponent(escape(atob(c.slice(4))));
-    var p = txt.split('|');
-    if (p.length !== 2 || !p[0] || !p[1]) return null;
-    return { key: p[0], binId: p[1] };
-  } catch (e) { return null; }
-}
-function syncCodigoActual() {
-  return (syncData.key && syncData.binId) ? syncCodificar(syncData.key, syncData.binId) : '';
+function guardarNombreUsuario(n) {
+  localStorage.setItem('guarderia_nombre', (n || '').trim().slice(0, 24));
 }
 
-function syncLoad() {
-  try { var r = localStorage.getItem('guarderia_sync'); if (r) { var c = JSON.parse(r); syncData = c; } } catch(e) {}
+// --- Sala: identifica el grupo que comparte los datos ------------------------
+function salaValida(s) {
+  return !!s && s.length >= SALA_MIN && /^[a-z0-9]+$/i.test(s);
 }
-function syncSave() {
-  localStorage.setItem('guarderia_sync', JSON.stringify(syncData));
+function salaDelEnlace() {
+  var h = (location.hash || '').replace(/^#/, '').trim();
+  return salaValida(h) ? h : '';
 }
-
-function syncConectado() { return !!(syncData.key && syncData.binId); }
-function syncSano() { return syncConectado() && syncFallosSeguidos === 0 && lastAutoSyncOkAt; }
+function salaGuardada() {
+  var s = (localStorage.getItem('guarderia_sala') || '').trim();
+  return salaValida(s) ? s : '';
+}
+function nuevaSalaId() {
+  var n = 20, s = '', i;
+  var arr = new Uint8Array(n);
+  (window.crypto || window.msCrypto).getRandomValues(arr);
+  for (i = 0; i < n; i++) s += SALA_ABC.charAt(arr[i] % SALA_ABC.length);
+  return s;
+}
+function enlaceSala() {
+  return location.origin + location.pathname + '#' + salaId;
+}
+function syncConectado() { return !!(fbRef && salaId); }
+function syncSano() { return syncConectado() && !syncProblema && !!lastSyncOkAt; }
 
 function syncStatus(txt, ok) {
   var el = document.getElementById('syncStatus');
   if (el) { el.textContent = txt; el.style.color = ok ? '#16a34a' : '#ef4444'; }
   var extra = document.getElementById('syncInfoExtra');
-  if (extra) extra.textContent = syncConectado()
-    ? ('Codigo Sync guardado (abri "Sincronizar" para copiarlo)')
-    : '';
+  if (extra) {
+    extra.textContent = syncConectado()
+      ? 'Compartido — abrí "Sincronizar" para pasarle el enlace a alguien más'
+      : 'Solo en este equipo — abrí "Sincronizar" para compartirlo';
+  }
 }
-
 function syncMsg(txt, tipo) {
-  var el = document.getElementById('syncBodyMsg');
+  var el = document.getElementById('syncMsg');
   if (!el) return;
-  el.style.display = 'block';
-  el.textContent = txt;
-  if (tipo === 'ok') { el.style.background = '#dcfce7'; el.style.color = '#166534'; }
-  else if (tipo === 'error') { el.style.background = '#fee2e2'; el.style.color = '#991b1b'; }
-  else { el.style.background = '#e0f2fe'; el.style.color = '#075985'; }
+  el.textContent = txt || '';
+  el.style.color = tipo === 'error' ? '#ef4444' : (tipo === 'ok' ? '#16a34a' : '#64748b');
 }
 
-// --- Traduce el codigo HTTP de JSONBin a algo que se entienda -----------------
-function syncExplicarError(status, cuerpo) {
-  if (status === 401 || status === 403) {
-    if (/limit|quota|exceed/i.test(cuerpo || '')) {
-      return 'Se agotaron las peticiones de tu cuenta JSONBin (el plan gratis da 10.000 y NO se renuevan). Entra a jsonbin.io para ver tu saldo.';
+// --- Normaliza lo que devuelve Firebase --------------------------------------
+// Firebase borra los arrays y objetos vacios, y a veces devuelve un array
+// como objeto {0:..,1:..}. Esto lo deja siempre con la forma que espera la app.
+function aArray(v) {
+  if (!v) return [];
+  if (Object.prototype.toString.call(v) === '[object Array]') {
+    return v.filter(function(x) { return !!x; });
+  }
+  return Object.keys(v).map(function(k) { return v[k]; }).filter(function(x) { return !!x; });
+}
+function aObjeto(v) {
+  if (!v) return {};
+  if (Object.prototype.toString.call(v) === '[object Array]') {
+    var o = {};
+    v.forEach(function(x, i) { if (x) o[i] = x; });
+    return o;
+  }
+  return v;
+}
+function normalizarRemoto(raw) {
+  raw = raw || {};
+  var t = raw.tombstones || {};
+  return {
+    registros: aArray(raw.registros).map(function(r) {
+      r.otros = aArray(r.otros);
+      return r;
+    }),
+    pagosPeriodo: aObjeto(raw.pagosPeriodo),
+    fechaInicio: raw.fechaInicio || '',
+    configTs: raw.configTs || 0,
+    tombstones: {
+      registros: aObjeto(t.registros),
+      pagos: aObjeto(t.pagos)
     }
-    return 'La Master Key no es valida o no tiene permiso sobre este bin.';
-  }
-  if (status === 404) return 'El Codigo Sync no existe o fue borrado en JSONBin.';
-  if (status === 429) return 'Se agotaron las peticiones de tu cuenta JSONBin (o estas yendo muy rapido). Entra a jsonbin.io para ver tu saldo.';
-  if (status === 422) return 'JSONBin rechazo los datos (posible limite de 100kb del plan gratuito).';
-  if (status === 0)   return 'Sin internet o la conexion fue bloqueada.';
-  return 'Error ' + status + ' de JSONBin.';
+  };
 }
 
-async function syncGet(apiKey, binId) {
-  syncDebug.gets++;
-  var resp;
+// Firebase rechaza undefined. Esto limpia el objeto antes de subirlo.
+function limpiarParaFirebase(v) {
+  if (v === undefined || v === null) return null;
+  if (Object.prototype.toString.call(v) === '[object Array]') {
+    return v.map(limpiarParaFirebase).filter(function(x) { return x !== null; });
+  }
+  if (typeof v === 'object') {
+    var o = {};
+    Object.keys(v).forEach(function(k) {
+      var lv = limpiarParaFirebase(v[k]);
+      if (lv !== null) o[k] = lv;
+    });
+    return o;
+  }
+  return v;
+}
+
+// --- Conexion ----------------------------------------------------------------
+function conectarFirebase() {
+  if (!salaId) return;
+  if (typeof firebase === 'undefined') {
+    syncProblema = 'No se pudo cargar Firebase. Revisá tu conexión a internet.';
+    syncStatus('⚠ ' + syncProblema, false);
+    return;
+  }
   try {
-    resp = await fetch('https://api.jsonbin.io/v3/b/' + binId + '/latest?_=' + Date.now(), {
-      headers: { 'X-Master-Key': apiKey, 'X-Bin-Meta': 'true' }
+    if (!fbApp) fbApp = firebase.initializeApp(FB_CONFIG);
+    fbDb = firebase.database();
+
+    if (fbRef) { fbRef.off(); fbRef = null; }
+    fbRef = fbDb.ref('salas/' + salaId);
+
+    syncStatus('↻ Conectando...', true);
+
+    fbDb.ref('.info/connected').on('value', function(s) {
+      fbOnline = !!s.val();
+      if (!fbOnline) {
+        syncStatus('● Sin conexión — se guarda en este equipo', false);
+      } else if (lastSyncOkAt) {
+        syncStatus('✓ Al día ' + lastSyncOkAt.toLocaleTimeString(), true);
+      }
+    });
+
+    fbRef.on('value', alRecibirRemoto, function(err) {
+      syncProblema = explicarErrorFb(err);
+      syncDebug.ultError = syncProblema;
+      syncStatus('⚠ ' + syncProblema, false);
+      if (modalSyncAbierto()) syncRender();
     });
   } catch (e) {
-    syncDebug.lastGetStatus = 0;
-    throw new Error(syncExplicarError(0, ''));
+    syncProblema = e.message;
+    syncDebug.ultError = e.message;
+    syncStatus('⚠ ' + e.message, false);
   }
-  syncDebug.lastGetStatus = resp.status;
-  if (!resp.ok) {
-    var t = ''; try { t = await resp.text(); } catch(e) {}
-    throw new Error(syncExplicarError(resp.status, t));
-  }
-  var data = await resp.json();
-  syncDebug.lastGetBytes = new Blob([JSON.stringify(data)]).size;
-  syncDebug.lastGetRecords = (data.record && data.record.registros) ? data.record.registros.length : 0;
-  return data;
 }
 
-async function syncPut(apiKey, binId, body) {
-  var resp;
-  try {
-    resp = await fetch('https://api.jsonbin.io/v3/b/' + binId, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'X-Master-Key': apiKey, 'X-Bin-Versioning': 'false' },
-      body: JSON.stringify(body)
-    });
-  } catch (e) {
-    syncDebug.lastPutStatus = 0;
-    throw new Error(syncExplicarError(0, ''));
+function explicarErrorFb(err) {
+  var m = (err && (err.message || err.code)) || 'Error desconocido';
+  if (/permission_denied|PERMISSION_DENIED/i.test(m)) {
+    return 'El código del enlace no es válido. Pedí que te reenvíen el enlace completo.';
   }
-  syncDebug.lastPutStatus = resp.status;
-  if (!resp.ok) {
-    var t = ''; try { t = await resp.text(); } catch(e) {}
-    throw new Error(syncExplicarError(resp.status, t));
+  if (/network|offline|unavailable/i.test(m)) {
+    return 'Sin conexión a internet. Los cambios se guardan aquí y suben solos al volver.';
   }
-  var data = await resp.json();
-  syncDebug.puts++;
-  syncDebug.lastPutRecords = body.registros ? body.registros.length : 0;
-  syncDebug.lastPutBytes = new Blob([JSON.stringify(body)]).size;
-  return data;
+  return m;
 }
 
-async function syncPost(apiKey, body) {
-  var resp;
-  try {
-    resp = await fetch('https://api.jsonbin.io/v3/b', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Master-Key': apiKey, 'X-Bin-Private': 'true', 'X-Bin-Name': 'guarderia-nico' },
-      body: JSON.stringify(body)
-    });
-  } catch (e) { throw new Error(syncExplicarError(0, '')); }
-  if (!resp.ok) {
-    var t = ''; try { t = await resp.text(); } catch(e) {}
-    throw new Error(syncExplicarError(resp.status, t));
+// --- Llega un cambio desde la nube -------------------------------------------
+function alRecibirRemoto(snap) {
+  syncDebug.lecturas++;
+  syncDebug.ultAccion = 'bajó cambios ' + new Date().toLocaleTimeString();
+
+  var remoteState = normalizarRemoto(snap.val());
+  ultimaFirmaRemota = syncFirma(remoteState);
+
+  var estadoLocal = snapshotLocal();
+  var firmaLocal = syncFirma(estadoLocal);
+
+  var merged = mergeState(estadoLocal, remoteState);
+  var firmaMerged = syncFirma(merged);
+
+  if (firmaMerged !== firmaLocal) {
+    aplicandoRemoto = true;
+    try { aplicarEstado(merged); } finally { aplicandoRemoto = false; }
   }
-  return await resp.json();
+
+  // Si tenemos algo que la nube no tiene, lo subimos.
+  if (firmaMerged !== ultimaFirmaRemota) subir(merged);
+  else syncDebug.evitadas++;
+
+  lastSyncOkAt = new Date();
+  syncProblema = '';
+  syncDebug.ultError = '';
+  syncStatus('✓ Al día ' + lastSyncOkAt.toLocaleTimeString(), true);
+  if (modalSyncAbierto()) syncRender();
+  refreshDebugPanel();
 }
 
-// --- Fusion (sin cambios de logica: se conserva la de v2) --------------------
-// Cada registro/pago tiene _ts (momento de ultima modificacion). Ante un mismo
-// "id de negocio" (fecha para registros, inicio|fin para pagos) gana el mas nuevo.
-// Las eliminaciones se recuerdan con "tombstones" con su propio timestamp.
+// --- Sube el estado a la nube ------------------------------------------------
+function subir(st) {
+  if (!fbRef) return Promise.resolve();
+  var payload = limpiarParaFirebase({
+    registros: st.registros || [],
+    pagosPeriodo: st.pagosPeriodo || {},
+    fechaInicio: st.fechaInicio || '',
+    configTs: st.configTs || 0,
+    tombstones: st.tombstones || { registros: {}, pagos: {} }
+  });
+  subiendo = true;
+  syncDebug.escrituras++;
+  syncDebug.ultAccion = 'subió cambios ' + new Date().toLocaleTimeString();
+  return fbRef.set(payload).then(function() {
+    ultimaFirmaRemota = syncFirma(st);
+    lastSyncOkAt = new Date();
+    syncProblema = '';
+    syncStatus('✓ Al día ' + lastSyncOkAt.toLocaleTimeString(), true);
+  }).catch(function(err) {
+    syncProblema = explicarErrorFb(err);
+    syncDebug.ultError = syncProblema;
+    syncStatus('⚠ ' + syncProblema, false);
+  }).then(function() {
+    subiendo = false;
+    refreshDebugPanel();
+    if (modalSyncAbierto()) syncRender();
+  });
+}
+
+// Agrupa varios cambios seguidos en una sola subida.
+function scheduleAutoSync() {
+  if (!syncConectado()) return;
+  if (aplicandoRemoto) return;
+  clearTimeout(autoSyncTimer);
+  autoSyncTimer = setTimeout(function() {
+    var st = snapshotLocal();
+    if (syncFirma(st) !== ultimaFirmaRemota) subir(st);
+    else syncDebug.evitadas++;
+  }, 800);
+}
+
+// --- Fusion (misma logica probada de v3) -------------------------------------
 function mergeState(local, remote) {
   var tRegistros = {};
   Object.keys((local.tombstones && local.tombstones.registros) || {}).forEach(function(k) {
@@ -1250,8 +1403,6 @@ function mergeState(local, remote) {
     var r = regMap[fecha];
     var tomb = tRegistros[fecha];
     // Una lapida solo mata a un registro cuyo _ts CONOCEMOS y es mas viejo.
-    // Si el registro no tiene _ts (formato antiguo) se conserva: ante la duda,
-    // preferimos un dato de mas y no perder informacion del usuario.
     if (!tomb) return true;
     if (!r._ts) return true;
     return tomb < r._ts;
@@ -1328,368 +1479,215 @@ function syncFirma(st) {
   return regs + '|' + pags + '|' + tr + '|' + tp + '|' + (st.fechaInicio || '') + '|' + (st.configTs || 0);
 }
 
-// Programa una sincronizacion (agrupa cambios seguidos en una sola)
-function scheduleAutoSync() {
-  if (!syncConectado()) return;
-  syncPollMs = SYNC_POLL_MIN;   // hubo actividad: volver a sondear rapido
-  clearTimeout(autoSyncTimer);
-  autoSyncTimer = setTimeout(function() { autoSync(); }, 1200);
-}
-
-// Baja lo remoto, fusiona, y sube SOLO si el resultado difiere de lo remoto.
-async function autoSync() {
-  if (!syncConectado()) return;
-  if (autoSyncing) { autoSyncQueued = true; return; }
-  autoSyncing = true;
-  syncDebug.lastAction = 'auto-sync ' + new Date().toLocaleTimeString();
-  syncStatus('↻ Sincronizando...', true);
-  try {
-    var remoteResp = await syncGet(syncData.key, syncData.binId);
-    var remoteRecord = remoteResp.record || {};
-    var remoteState = {
-      registros: remoteRecord.registros || [],
-      pagosPeriodo: remoteRecord.pagosPeriodo || {},
-      fechaInicio: remoteRecord.fechaInicio || '',
-      configTs: remoteRecord.configTs || 0,
-      tombstones: remoteRecord.tombstones || { registros: {}, pagos: {} }
-    };
-    var firmaRemota = syncFirma(remoteState);
-    var firmaLocalPrevia = syncFirma(snapshotLocal());
-
-    var merged = mergeState(snapshotLocal(), remoteState);
-    var firmaMerged = syncFirma(merged);
-
-    // Solo tocar el estado local si la fusion cambio algo (evita repintados)
-    if (firmaMerged !== firmaLocalPrevia) aplicarEstado(merged);
-
-    // Solo gastar un PUT si tenemos algo que la nube no tiene
-    if (firmaMerged !== firmaRemota) {
-      await syncPut(syncData.key, syncData.binId, {
-        registros: merged.registros,
-        pagosPeriodo: merged.pagosPeriodo,
-        fechaInicio: merged.fechaInicio,
-        configTs: merged.configTs,
-        tombstones: merged.tombstones
-      });
-      syncPollMs = SYNC_POLL_MIN;
-    } else {
-      syncDebug.skipped++;
-      // Nada nuevo por ningun lado -> espaciar el sondeo (ahorra peticiones)
-      if (firmaMerged === firmaLocalPrevia) {
-        syncPollMs = Math.min(Math.round(syncPollMs * 1.5), SYNC_POLL_MAX);
-      }
-    }
-
-    lastAutoSyncOkAt = new Date();
-    syncFallosSeguidos = 0;
-    syncUltimoProblema = '';
-    syncDebug.lastError = '';
-    syncStatus('✓ Sincronizado ' + lastAutoSyncOkAt.toLocaleTimeString(), true);
-    var st = document.getElementById('syncModalStatusLine');
-    if (st) st.textContent = 'Ultima sincronizacion: ' + lastAutoSyncOkAt.toLocaleTimeString();
-  } catch (e) {
-    console.error('[AUTOSYNC] Error:', e);
-    syncFallosSeguidos++;
-    syncUltimoProblema = e.message;
-    syncDebug.lastError = e.message;
-    syncStatus('⚠ ' + e.message, false);
-    syncPollMs = Math.min(Math.round(syncPollMs * 2), SYNC_POLL_MAX);
-    if (document.getElementById('modalSync') &&
-        document.getElementById('modalSync').classList.contains('active')) {
-      syncRender();
-    }
-  } finally {
-    autoSyncing = false;
-    refreshDebugPanel();
-    reprogramarPoll();
-    if (autoSyncQueued) { autoSyncQueued = false; scheduleAutoSync(); }
-  }
-}
-
-// --- Crear un Codigo Sync nuevo (SOLO el primer dispositivo) -----------------
-async function syncCreate() {
+// --- Empezar a compartir (crea la sala) --------------------------------------
+function syncCrearSala() {
   if (syncConectado()) {
-    alert('Este equipo YA esta conectado.\n\nSi creas otro, quedaran dos bases separadas y los datos no se compartiran.\nUsa "Ya tengo un Codigo Sync" en el otro equipo.');
+    syncMsg('Este equipo ya está compartido. Usá el botón de copiar el enlace.', 'error');
     return;
   }
-  var key = document.getElementById('syncInputKey').value.trim();
-  if (!key) { alert('Pega tu Master Key de JSONBin.'); return; }
-
-  var btn = document.getElementById('syncBtnCreate');
-  btn.disabled = true;
-  btn.textContent = 'Creando...';
-
-  try {
-    syncMsg('Creando sincronizacion en JSONBin...', 'info');
-    var dataToSend = {
-      registros: registros, pagosPeriodo: pagosPeriodo, fechaInicio: fechaInicio,
-      configTs: configTs, tombstones: tombstones
-    };
-    var postResp = await syncPost(key, dataToSend);
-    var binId = postResp.metadata.id;
-
-    var getResp = await syncGet(key, binId);
-    var d = getResp.record;
-    if (!d || !d.registros || d.registros.length !== registros.length) {
-      throw new Error('El bin se creo pero la verificacion fallo');
-    }
-
-    syncData = { key: key, binId: binId };
-    syncSave();
-    syncFallosSeguidos = 0;
-    lastAutoSyncOkAt = new Date();
-    syncStatus('✓ Sync creado', true);
-    syncRender();
-    startAutoSyncLoop();
-  } catch (e) {
-    console.error('[SYNC] Error al crear:', e);
-    syncMsg('✖ ' + e.message, 'error');
-    btn.disabled = false;
-    btn.textContent = 'Crear Sync';
-  }
+  if (!nombreUsuario()) { pedirNombre(function() { syncCrearSala(); }); return; }
+  salaId = nuevaSalaId();
+  localStorage.setItem('guarderia_sala', salaId);
+  try { history.replaceState(null, '', '#' + salaId); } catch (e) { location.hash = salaId; }
+  conectarFirebase();
+  syncMsg('✓ Listo. Copiá el enlace y pasalo por WhatsApp.', 'ok');
+  syncRender();
 }
 
-// --- Conectar pegando UN SOLO Codigo Sync (fusiona, no pisa) -----------------
-async function syncConnect() {
-  var codigo = document.getElementById('syncInputCode').value.trim();
-  if (!codigo) { alert('Pega el Codigo Sync que te muestra el otro equipo.'); return; }
-
-  var cred = syncDecodificar(codigo);
-  if (!cred) {
-    // Compatibilidad con la version vieja: Master Key + Bin ID por separado
-    var k2 = document.getElementById('syncInputKey2');
-    var caja = document.getElementById('syncCajaKeyVieja');
-    if (k2 && k2.value.trim()) {
-      cred = { key: k2.value.trim(), binId: codigo };
-    } else if (/^[a-f0-9]{20,30}$/i.test(codigo)) {
-      // Parece un Bin ID valido: solo falta la Master Key
-      if (caja) caja.style.display = 'block';
-      if (k2) k2.focus();
-      syncMsg('Ese es un Bin ID del formato viejo. Falta tu MASTER KEY en el recuadro amarillo de abajo.', 'error');
-      return;
-    } else {
-      syncMsg('Ese codigo no sirve. Debe empezar con "GN1-" (lo copias del otro equipo con "Copiar codigo") o ser un Bin ID de JSONBin.', 'error');
-      return;
-    }
-  }
-
-  var btn = document.getElementById('syncBtnConnect');
-  btn.disabled = true;
-  btn.textContent = 'Conectando...';
-
-  try {
-    syncMsg('Verificando y fusionando datos...', 'info');
-    var getResp = await syncGet(cred.key, cred.binId);
-    var d = getResp.record;
-    if (!d || !d.registros) throw new Error('Ese codigo no contiene datos validos de la guarderia.');
-
-    syncData = { key: cred.key, binId: cred.binId };
-    syncSave();
-
-    var remoteState = {
-      registros: d.registros || [],
-      pagosPeriodo: d.pagosPeriodo || {},
-      fechaInicio: d.fechaInicio || '',
-      configTs: d.configTs || 0,
-      tombstones: d.tombstones || { registros: {}, pagos: {} }
-    };
-    // Fusiona lo local con lo de la nube (no se pierde nada de ningun lado)
-    var merged = mergeState(snapshotLocal(), remoteState);
-    aplicarEstado(merged);
-    if (syncFirma(merged) !== syncFirma(remoteState)) {
-      await syncPut(cred.key, cred.binId, {
-        registros: merged.registros, pagosPeriodo: merged.pagosPeriodo,
-        fechaInicio: merged.fechaInicio, configTs: merged.configTs, tombstones: merged.tombstones
-      });
-    }
-
-    syncFallosSeguidos = 0;
-    syncUltimoProblema = '';
-    lastAutoSyncOkAt = new Date();
-    syncStatus('✓ Conectado', true);
-    syncRender();
-    syncMsg('✓ Conectado y sincronizado (' + merged.registros.length + ' registros)', 'ok');
-    startAutoSyncLoop();
-  } catch (e) {
-    console.error('[SYNC] Error al conectar:', e);
-    syncData = { key: '', binId: '' };
-    syncSave();
-    syncMsg('✖ ' + e.message, 'error');
-    btn.disabled = false;
-    btn.textContent = 'Conectar';
-  }
+// --- Dejar de compartir en ESTE equipo ---------------------------------------
+function syncDesconectar() {
+  if (!confirm('Este equipo deja de sincronizar.\n\nLos datos que ya tenés aquí NO se borran, y los demás equipos siguen compartiendo entre ellos.\n\n¿Seguro?')) return;
+  if (fbRef) { fbRef.off(); fbRef = null; }
+  if (fbDb) { try { fbDb.ref('.info/connected').off(); } catch (e) {} }
+  salaId = '';
+  ultimaFirmaRemota = null;
+  lastSyncOkAt = null;
+  localStorage.removeItem('guarderia_sala');
+  try { history.replaceState(null, '', location.pathname); } catch (e) { location.hash = ''; }
+  syncStatus('Solo en este equipo', true);
+  syncMsg('Desconectado de este equipo.', 'ok');
+  syncRender();
 }
 
-function syncCopiarCodigo() {
-  var cod = syncCodigoActual();
-  if (!cod) return;
-  var ok = function() {
-    var b = document.getElementById('syncBtnCopiar');
-    if (b) { b.textContent = '✓ Copiado'; setTimeout(function(){ b.textContent = '⧉ Copiar codigo'; }, 1800); }
-  };
+function syncCopiarEnlace() {
+  var url = enlaceSala();
+  var ok = function() { syncMsg('✓ Enlace copiado. Pegalo en WhatsApp.', 'ok'); };
   if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(cod).then(ok, function() { prompt('Copia este codigo:', cod); });
+    navigator.clipboard.writeText(url).then(ok, function() { syncSeleccionarEnlace(); });
   } else {
-    prompt('Copia este codigo:', cod);
+    syncSeleccionarEnlace();
   }
+}
+function syncSeleccionarEnlace() {
+  var i = document.getElementById('syncEnlaceInput');
+  if (i) { i.focus(); i.select(); }
+  syncMsg('Copialo con Ctrl+C (o mantenelo presionado en el celular).', 'info');
+}
+function syncCompartirNativo() {
+  var url = enlaceSala();
+  if (navigator.share) {
+    navigator.share({
+      title: 'Control Guardería - Nicolás',
+      text: 'Abrí este enlace para registrar las horas de Nicolás:',
+      url: url
+    }).catch(function() {});
+  } else {
+    syncCopiarEnlace();
+  }
+}
+
+// --- Pedir el nombre (una sola vez por equipo) -------------------------------
+function pedirNombre(despues) {
+  var ov = document.getElementById('modalNombre');
+  if (!ov) { // fallback
+    var n = prompt('¿Cómo te llamás? Se usa para saber quién anotó cada registro.');
+    if (n && n.trim()) { guardarNombreUsuario(n); if (despues) despues(); }
+    return;
+  }
+  ov.classList.add('active');
+  var input = document.getElementById('inputNombreUsuario');
+  if (input) { input.value = nombreUsuario(); setTimeout(function() { input.focus(); }, 100); }
+  ov.dataset.despues = '1';
+  window._trasNombre = despues || null;
+}
+function confirmarNombre() {
+  var input = document.getElementById('inputNombreUsuario');
+  var n = input ? input.value.trim() : '';
+  if (!n) { alert('Escribí tu nombre para poder saber quién anotó cada cosa.'); return; }
+  guardarNombreUsuario(n);
+  var ov = document.getElementById('modalNombre');
+  if (ov) ov.classList.remove('active');
+  if (window.renderAll) renderAll();
+  var f = window._trasNombre; window._trasNombre = null;
+  if (f) f();
 }
 
 // --- Render del modal --------------------------------------------------------
+function modalSyncAbierto() {
+  var m = document.getElementById('modalSync');
+  return !!(m && m.classList.contains('active'));
+}
+
 function syncRender() {
-  var b = document.getElementById('syncBody');
-  if (!b) return;
-  b.innerHTML = '<div id="syncBodyMsg" style="display:none;padding:8px 12px;border-radius:6px;font-size:0.85rem;font-weight:600;text-align:center;margin-bottom:8px;"></div>';
+  var body = document.getElementById('syncBody');
+  if (!body) return;
+  var html = '';
+
+  html += '<div style="background:#f1f5f9;border-radius:8px;padding:10px;margin-bottom:12px;font-size:0.85rem;">' +
+          'Este equipo es: <strong>' + (nombreUsuario() || 'sin nombre') + '</strong> ' +
+          '<button class="btn btn-outline btn-sm" id="syncBtnNombre" style="margin-left:6px;">Cambiar</button>' +
+          '</div>';
 
   if (syncConectado()) {
-    var fallando = syncFallosSeguidos > 0;
-    var cod = syncCodigoActual();
-    var ultima = lastAutoSyncOkAt
-      ? ('Ultima sincronizacion correcta: ' + lastAutoSyncOkAt.toLocaleTimeString())
-      : 'Todavia no se completo ninguna sincronizacion.';
+    var estado = syncProblema
+      ? '<span style="color:#ef4444;">⚠ ' + syncProblema + '</span>'
+      : (fbOnline
+          ? '<span style="color:#16a34a;">✓ Compartido y al día</span>'
+          : '<span style="color:#f59e0b;">● Sin internet — sube solo al volver</span>');
 
-    var cabecera = fallando
-      ? '<div style="font-size:0.95rem;color:#b91c1c;font-weight:700;margin-bottom:6px;">⚠ Conectado, pero la sincronizacion esta FALLANDO</div>' +
-        '<div style="font-size:0.85rem;color:#991b1b;background:#fee2e2;border-radius:6px;padding:8px;margin-bottom:10px;text-align:left;">' +
-        syncUltimoProblema + '<br><span style="color:#7f1d1d;">Intentos fallidos seguidos: ' + syncFallosSeguidos + '</span></div>'
-      : '<div style="font-size:0.95rem;color:#16a34a;font-weight:700;margin-bottom:8px;">✓ Conectado y funcionando</div>';
-
-    b.innerHTML += '<div style="text-align:center;padding:8px 0;">' +
-      cabecera +
-      '<div style="font-size:0.8rem;color:#475569;margin-bottom:4px;">Tu Codigo Sync (pegalo en el otro equipo):</div>' +
-      '<div style="font-family:monospace;font-size:0.75rem;word-break:break-all;background:#f1f5f9;border:1px solid #cbd5e1;border-radius:6px;padding:8px;margin-bottom:6px;">' + cod + '</div>' +
-      '<button class="btn btn-outline btn-sm" id="syncBtnCopiar" style="margin-bottom:10px;">⧉ Copiar codigo</button>' +
-      '<div id="syncModalStatusLine" style="font-size:0.75rem;color:#94a3b8;margin-bottom:10px;">' + ultima + '</div>' +
-      '<div style="font-size:0.75rem;color:#64748b;background:#f8fafc;border-radius:6px;padding:8px;margin-bottom:12px;text-align:left;">' +
-      'No hace falta apretar nada: al agregar, editar o borrar se sube solo. Ademas revisa cada ' +
-      Math.round(syncPollMs / 1000) + 's (se espacia solo hasta 5 min si no hay cambios, para no gastar peticiones de JSONBin).' +
-      '</div>' +
-      '<button class="btn btn-primary" id="syncBtnForce" style="margin-bottom:6px;">↻ Sincronizar ahora</button>' +
-      '<br><button class="btn btn-outline btn-sm" id="syncBtnReset" style="color:#ef4444;margin-top:4px;">✖ Desconectar este equipo</button>' +
-      '</div>';
-
-    document.getElementById('syncBtnCopiar').onclick = syncCopiarCodigo;
-    document.getElementById('syncBtnForce').onclick = function() { syncPollMs = SYNC_POLL_MIN; autoSync(); };
-    document.getElementById('syncBtnReset').onclick = function() {
-      if (confirm('¿Desconectar? Los datos locales no se borran, pero dejaran de compartirse hasta que te reconectes.')) {
-        stopAutoSyncLoop();
-        syncData = { key: '', binId: '' }; syncSave();
-        syncFallosSeguidos = 0; syncUltimoProblema = ''; lastAutoSyncOkAt = null;
-        syncStatus('', true); syncRender();
-      }
-    };
+    html += '<p style="margin-bottom:10px;">' + estado + '</p>';
+    html += '<label style="font-size:0.8rem;color:#64748b;">Enlace para compartir</label>' +
+            '<input type="text" id="syncEnlaceInput" readonly value="' + enlaceSala() + '" ' +
+            'style="width:100%;margin:4px 0 10px;font-size:0.8rem;padding:8px;background:#f8fafc;">' +
+            '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+            '<button class="btn btn-primary btn-sm" id="syncBtnCompartir">↪ Compartir</button>' +
+            '<button class="btn btn-outline btn-sm" id="syncBtnCopiar">⧉ Copiar enlace</button>' +
+            '</div>';
+    html += '<p class="text-muted" style="font-size:0.78rem;margin-top:12px;">' +
+            'Cualquiera con este enlace puede anotar y editar. Pasalo solo a quien de verdad ' +
+            'deba registrar horas.</p>';
+    html += '<div style="margin-top:14px;border-top:1px solid #e2e8f0;padding-top:10px;">' +
+            '<button class="btn btn-outline btn-sm" id="syncBtnDesconectar" style="color:#ef4444;border-color:#fecaca;">' +
+            '✖ Dejar de compartir en este equipo</button></div>';
   } else {
-    b.innerHTML +=
-      '<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px;margin-bottom:14px;font-size:0.82rem;color:#1e3a8a;text-align:left;">' +
-      '<strong>¿Primera vez?</strong> Configura <strong>UN</strong> equipo con la opcion A. Despues, en los demas equipos usa la opcion B pegando el codigo. ' +
-      'Nunca uses la opcion A dos veces: crearias dos bases separadas.' +
-      '</div>' +
-
-      '<p style="font-size:0.9rem;font-weight:700;margin-bottom:8px;">B) Ya tengo un Codigo Sync (lo mas comun)</p>' +
-      '<div class="form-group mb-8">' +
-      '<label>Pega aqui el codigo que te muestra el otro equipo</label>' +
-      '<input type="text" id="syncInputCode" placeholder="GN1-..." style="width:100%;margin-top:4px;">' +
-      '</div>' +
-      '<div id="syncCajaKeyVieja" style="display:none;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:10px;margin-bottom:10px;">' +
-      '<div style="font-size:0.78rem;color:#92400e;margin-bottom:6px;">' +
-      'Eso es un <strong>Bin ID</strong> (formato viejo). Necesito tambien tu Master Key para poder entrar:' +
-      '</div>' +
-      '<input type="password" id="syncInputKey2" placeholder="Master Key de JSONBin" style="width:100%;">' +
-      '<div style="font-size:0.72rem;color:#a16207;margin-top:4px;">' +
-      'La sacas de jsonbin.io &rarr; menu API KEYS' +
-      '</div>' +
-      '</div>' +
-      '<button class="btn btn-primary" id="syncBtnConnect">Conectar</button>' +
-
-      '<div style="margin-top:16px;padding-top:14px;border-top:1px solid #e2e8f0;">' +
-      '<p style="font-size:0.9rem;font-weight:700;margin-bottom:8px;">A) Configurar el primer equipo</p>' +
-      '<div class="form-group mb-8">' +
-      '<label>1. Crea una cuenta gratis en <a href="https://jsonbin.io" target="_blank">jsonbin.io</a></label>' +
-      '</div>' +
-      '<div class="form-group mb-8">' +
-      '<label>2. Copia tu <strong>Master Key</strong> desde el panel de JSONBin</label>' +
-      '<input type="password" id="syncInputKey" placeholder="Tu Master Key de JSONBin" style="width:100%;margin-top:4px;">' +
-      '</div>' +
-      '<button class="btn btn-outline" id="syncBtnCreate">Crear Sync</button>' +
-      '</div>';
-
-    document.getElementById('syncBtnCreate').onclick = syncCreate;
-    document.getElementById('syncBtnConnect').onclick = syncConnect;
-
-    // Si lo pegado parece un Bin ID viejo, mostramos el campo de Master Key solo.
-    var campoCod = document.getElementById('syncInputCode');
-    var revisarFormato = function() {
-      var v = campoCod.value.trim();
-      var esViejo = v.length > 0 && v.indexOf('GN1-') !== 0;
-      document.getElementById('syncCajaKeyVieja').style.display = esViejo ? 'block' : 'none';
-    };
-    campoCod.addEventListener('input', revisarFormato);
-    campoCod.addEventListener('paste', function() { setTimeout(revisarFormato, 0); });
+    html += '<p style="margin-bottom:12px;">Ahora mismo los datos están <strong>solo en este equipo</strong>.</p>';
+    html += '<button class="btn btn-primary" id="syncBtnCrear">➕ Empezar a compartir</button>';
+    html += '<p class="text-muted" style="font-size:0.8rem;margin-top:12px;">' +
+            'Se crea un enlace privado. Quién lo abra, ve y anota lo mismo que vos, al instante. ' +
+            'No hay contraseñas: el enlace <em>es</em> la llave, así que no lo publiques en ningún lado.</p>';
   }
+
+  html += '<p id="syncMsg" style="font-size:0.82rem;margin-top:10px;min-height:1.2em;"></p>';
+  body.innerHTML = html;
+
+  var b;
+  b = document.getElementById('syncBtnCrear');        if (b) b.onclick = syncCrearSala;
+  b = document.getElementById('syncBtnCopiar');       if (b) b.onclick = syncCopiarEnlace;
+  b = document.getElementById('syncBtnCompartir');    if (b) b.onclick = syncCompartirNativo;
+  b = document.getElementById('syncBtnDesconectar');  if (b) b.onclick = syncDesconectar;
+  b = document.getElementById('syncBtnNombre');       if (b) b.onclick = function() { pedirNombre(function() { syncRender(); }); };
+  var inp = document.getElementById('syncEnlaceInput');
+  if (inp) inp.onclick = function() { this.select(); };
 }
 
 function abrirModalSync() {
-  syncRender();
   document.getElementById('modalSync').classList.add('active');
+  syncRender();
 }
-
 function cerrarModalSync() {
   document.getElementById('modalSync').classList.remove('active');
-}
-
-// --- Sondeo adaptativo -------------------------------------------------------
-function reprogramarPoll() {
-  if (autoSyncInterval) { clearTimeout(autoSyncInterval); autoSyncInterval = null; }
-  if (!syncConectado()) return;
-  if (document.visibilityState === 'hidden') return;  // no gastar peticiones en segundo plano
-  autoSyncInterval = setTimeout(function() { autoSync(); }, syncPollMs);
-}
-
-function startAutoSyncLoop() {
-  stopAutoSyncLoop();
-  reprogramarPoll();
-  document.addEventListener('visibilitychange', onVisibilityAutoSync);
-  window.addEventListener('focus', onFocusAutoSync);
-  autoSync();
-}
-
-function stopAutoSyncLoop() {
-  if (autoSyncInterval) { clearTimeout(autoSyncInterval); autoSyncInterval = null; }
-  document.removeEventListener('visibilitychange', onVisibilityAutoSync);
-  window.removeEventListener('focus', onFocusAutoSync);
-}
-
-function onVisibilityAutoSync() {
-  if (document.visibilityState === 'visible') { syncPollMs = SYNC_POLL_MIN; autoSync(); }
-  else { if (autoSyncInterval) { clearTimeout(autoSyncInterval); autoSyncInterval = null; } }
-}
-
-function onFocusAutoSync() {
-  syncPollMs = SYNC_POLL_MIN;
-  autoSync();
 }
 
 function refreshDebugPanel() {
   var p = document.getElementById('syncDebugPanel');
   if (!p) return;
   if (p.style.display !== 'block') return;
-  var localBytes = new Blob([JSON.stringify({ registros: registros, pagosPeriodo: pagosPeriodo, fechaInicio: fechaInicio })]).size;
+  var localBytes = new Blob([JSON.stringify(snapshotLocal())]).size;
   p.textContent =
-    'CODIGO SYNC: ' + (syncCodigoActual() || '(sin conectar)') + '\n' +
-    'BIN ID: ' + (syncData.binId || '(sin conectar)') + '\n' +
-    'Estado real: ' + (syncConectado() ? (syncFallosSeguidos === 0 ? 'OK' : 'FALLANDO (' + syncFallosSeguidos + ' seguidos)') : 'sin conectar') + '\n' +
-    'Sondeo actual: cada ' + Math.round(syncPollMs / 1000) + 's\n' +
+    'Sala: ' + (salaId || '(sin compartir)') + '\n' +
+    'Enlace: ' + (salaId ? enlaceSala() : '-') + '\n' +
+    'Nombre de este equipo: ' + (nombreUsuario() || '(sin nombre)') + '\n' +
+    'Conexion Firebase: ' + (syncConectado() ? (fbOnline ? 'en linea' : 'sin internet') : 'sin compartir') + '\n' +
+    'Ultima sync OK: ' + (lastSyncOkAt ? lastSyncOkAt.toLocaleTimeString() : '-') + '\n' +
     'Registros locales: ' + registros.length + '\n' +
     'Pagos registrados: ' + Object.keys(pagosPeriodo).length + '\n' +
     'Fecha inicio: ' + (fechaInicio || '-') + '\n' +
-    'JSON local: ' + localBytes + ' bytes' + (localBytes > 90000 ? '  ⚠ cerca del limite de 100kb del plan gratis' : '') + '\n' +
+    'JSON local: ' + localBytes + ' bytes\n' +
     '---\n' +
-    'Peticiones esta sesion: ' + syncDebug.gets + ' GET / ' + syncDebug.puts + ' PUT (' + syncDebug.skipped + ' subidas evitadas)\n' +
-    'Ult GET: ' + syncDebug.lastGetStatus + ' (' + syncDebug.lastGetRecords + ' regs)\n' +
-    'Ult PUT: ' + syncDebug.lastPutStatus + ' (' + syncDebug.lastPutRecords + ' regs, ' + syncDebug.lastPutBytes + ' bytes)\n' +
-    'Ult accion: ' + syncDebug.lastAction + '\n' +
-    'Ult error: ' + (syncDebug.lastError || '(ninguno)') + '\n' +
+    'Bajadas: ' + syncDebug.lecturas + '  Subidas: ' + syncDebug.escrituras + '  Evitadas: ' + syncDebug.evitadas + '\n' +
+    'Ult accion: ' + (syncDebug.ultAccion || '-') + '\n' +
+    'Ult error: ' + (syncDebug.ultError || '(ninguno)') + '\n' +
     '---\n' +
     'Fechas locales: ' + registros.map(function(r) { return r.fecha; }).slice(0, 10).join(', ') + (registros.length > 10 ? '...' : '');
+}
+
+// --- Arranque ----------------------------------------------------------------
+function initSync() {
+  var delEnlace = salaDelEnlace();
+  var guardada = salaGuardada();
+
+  if (delEnlace && guardada && delEnlace !== guardada) {
+    if (!confirm('Este enlace es de un grupo distinto al que venías usando.\n\n' +
+                 'Si seguís, este equipo pasa al grupo nuevo y tus registros actuales se ' +
+                 'suman a los de ese grupo.\n\n¿Seguir?')) {
+      try { history.replaceState(null, '', '#' + guardada); } catch (e) {}
+      salaId = guardada;
+      conectarFirebase();
+      return;
+    }
+  }
+
+  salaId = delEnlace || guardada;
+
+  if (salaId) {
+    localStorage.setItem('guarderia_sala', salaId);
+    if (!salaDelEnlace()) {
+      try { history.replaceState(null, '', '#' + salaId); } catch (e) {}
+    }
+    conectarFirebase();
+  } else {
+    syncStatus('Solo en este equipo', true);
+  }
+
+  window.addEventListener('hashchange', function() {
+    var s = salaDelEnlace();
+    if (s && s !== salaId) {
+      salaId = s;
+      localStorage.setItem('guarderia_sala', salaId);
+      conectarFirebase();
+      syncRender();
+    }
+  });
 }
 
 // Init
@@ -1792,22 +1790,25 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('btnGenerarReporte').addEventListener('click', generarReporte);
   document.getElementById('btnLimpiarDatos').addEventListener('click', limpiarDatos);
 
-  syncLoad();
+  document.addEventListener('click', function(e) {
+    if (e.target && e.target.id === 'btnDebugSync') {
+      var p = document.getElementById('syncDebugPanel');
+      if (!p) return;
+      if (p.style.display === 'block') p.style.display = 'none';
+      else { p.style.display = 'block'; refreshDebugPanel(); }
+    }
+  });
 
-document.addEventListener('click', function(e) {
-  if (e.target && e.target.id === 'btnDebugSync') {
-    var p = document.getElementById('syncDebugPanel');
-    if (!p) return;
-    if (p.style.display === 'block') p.style.display = 'none';
-    else { p.style.display = 'block'; refreshDebugPanel(); }
-  }
-});
+  document.getElementById('btnConfirmarNombre').addEventListener('click', confirmarNombre);
+  document.getElementById('inputNombreUsuario').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); confirmarNombre(); }
+  });
 
-  if (syncData.key && syncData.binId) {
-    // No decimos "Conectado" hasta que una peticion real funcione.
-    syncStatus('\u21bb Verificando sincronizacion...', true);
-    startAutoSyncLoop();   // startAutoSyncLoop ya dispara un autoSync inmediato
-  }
+  initSync();
+
+  // Si abre por un enlace compartido y aun no dijo su nombre, se lo pedimos:
+  // hace falta para que quede constancia de quien anota cada registro.
+  if (salaId && !nombreUsuario()) pedirNombre(null);
 
   document.getElementById('btnAbrirSync').addEventListener('click', abrirModalSync);
   document.getElementById('modalSync').addEventListener('click', function(e) {
