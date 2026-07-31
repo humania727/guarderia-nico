@@ -63,7 +63,13 @@
   .badge-no { background: #f1f5f9; color: #64748b; }
   .badge-pendiente { background: #fef3c7; color: #92400e; }
   .badge-pagado { background: #dbeafe; color: #1e40af; }
-  .eliminar-btn { background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 1rem; padding: 2px 6px; border-radius: 4px; }
+  .editar-btn {
+  background: none; border: none; cursor: pointer; font-size: 1rem;
+  padding: 2px 4px; border-radius: 4px; line-height: 1;
+}
+.editar-btn:hover { background: #fef3c7; }
+.fila-editando { background: #fffbeb !important; }
+.eliminar-btn { background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 1rem; padding: 2px 6px; border-radius: 4px; }
   .eliminar-btn:hover { color: #ef4444; background: #fef2f2; }
 
   .export-actions { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -160,9 +166,14 @@
       </div>
       <div id="otrosContainer"></div>
     </div>
+    <div id="bannerEdicion" style="display:none;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:10px 12px;margin-top:10px;font-size:0.87rem;">
+      <strong>&#x270f;&#xfe0f; Editando el d&iacute;a <span id="bannerEdicionFecha"></span></strong>
+      <div id="bannerEdicionOriginal" style="color:#92400e;font-size:0.8rem;margin-top:2px;"></div>
+    </div>
     <div class="form-row mt-8">
-      <button type="submit" class="btn btn-primary">&#x2795; Agregar registro</button>
+      <button type="submit" class="btn btn-primary" id="btnGuardarRegistro">&#x2795; Agregar registro</button>
       <button type="button" class="btn btn-success" id="btnRecogerAhora">&#x23f0; Recoger ahora</button>
+      <button type="button" class="btn btn-outline" id="btnCancelarEdicion" style="display:none;">Cancelar</button>
     </div>
   </form>
 </div>
@@ -601,6 +612,7 @@ function agregarRegistro(r) {
 }
 
 function eliminarRegistro(fecha) {
+  if (typeof editandoFecha !== 'undefined' && editandoFecha === fecha) salirModoEdicion();
   registros = registros.filter(r => r.fecha !== fecha);
   tombstones.registros[fecha] = Date.now();
   guardarTombstones();
@@ -786,6 +798,76 @@ function escaparHtml(s) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Edicion de un dia ya registrado
+// El formulario es el mismo de siempre; solo cambia de modo.
+// ---------------------------------------------------------------------------
+var editandoFecha = null;   // null = agregando, '2026-08-04' = editando ese dia
+
+function resumenCorto(r) {
+  if (!r) return '';
+  var p = formatearHora(r.llegada) + ' a ' + (r.salida ? formatearHora(r.salida) : 'sin salida');
+  p += ' \u00b7 ' + (r.horas ? r.horas.toFixed(1) + ' h' : 'sin horas');
+  if (r.recogido) p += ' \u00b7 con transporte';
+  p += ' \u00b7 ' + formatearMoneda(r.total || 0);
+  return p;
+}
+
+function editarRegistro(fecha) {
+  var r = registros.find(function(x) { return x.fecha === fecha; });
+  if (!r) { alert('Ese d\u00eda ya no est\u00e1 en la lista.'); return; }
+
+  editandoFecha = fecha;
+
+  document.getElementById('fecha').value = r.fecha;
+  document.getElementById('llegada').value = r.llegada || '';
+  document.getElementById('salida').value = r.salida || '';
+  document.getElementById('recogido').checked = !!r.recogido;
+
+  var cont = document.getElementById('otrosContainer');
+  cont.innerHTML = '';
+  (r.otros || []).forEach(function(o) { agregarOtroForm(o.descripcion, o.monto); });
+
+  document.getElementById('bannerEdicionFecha').textContent = formatearFechaCorta(r.fecha);
+  document.getElementById('bannerEdicionOriginal').textContent =
+    'Estaba: ' + resumenCorto(r) + (r.autor ? '  (lo anot\u00f3 ' + r.autor + ')' : '');
+  document.getElementById('bannerEdicion').style.display = 'block';
+  document.getElementById('btnGuardarRegistro').innerHTML = '\ud83d\udcbe Guardar cambios';
+  document.getElementById('btnCancelarEdicion').style.display = '';
+  document.getElementById('btnRecogerAhora').style.display = 'none';
+
+  // resaltar la fila que se esta editando
+  document.querySelectorAll('#tablaEventos tr').forEach(function(tr) {
+    tr.classList.remove('fila-editando');
+  });
+  var btn = document.querySelector('.editar-btn[data-fecha="' + fecha + '"]');
+  if (btn) {
+    var tr = btn.closest('tr');
+    if (tr) tr.classList.add('fila-editando');
+  }
+
+  var form = document.getElementById('formRegistro');
+  if (form && form.scrollIntoView) form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  var elLlegada = document.getElementById('llegada');
+  if (elLlegada) setTimeout(function() { elLlegada.focus(); }, 350);
+}
+
+function salirModoEdicion() {
+  editandoFecha = null;
+  document.getElementById('bannerEdicion').style.display = 'none';
+  document.getElementById('btnGuardarRegistro').innerHTML = '\u2795 Agregar registro';
+  document.getElementById('btnCancelarEdicion').style.display = 'none';
+  document.getElementById('btnRecogerAhora').style.display = '';
+  document.getElementById('fecha').value = hoyStr();
+  document.getElementById('llegada').value = '07:30';
+  document.getElementById('salida').value = '';
+  document.getElementById('recogido').checked = false;
+  document.getElementById('otrosContainer').innerHTML = '';
+  document.querySelectorAll('#tablaEventos tr').forEach(function(tr) {
+    tr.classList.remove('fila-editando');
+  });
+}
+
 function renderEventos() {
   var tbody = document.getElementById('tablaEventos');
   var vacio = document.getElementById('vacioEventos');
@@ -811,11 +893,17 @@ function renderEventos() {
       '<td>' + otrosStr + '</td>' +
       '<td><strong>' + formatearMoneda(r.total || 0) + '</strong></td>' +
       '<td>' + firmaAutor(r) + '</td>' +
-      '<td><button class="eliminar-btn" data-fecha="' + r.fecha + '" title="Eliminar">&times;</button></td>' +
+      '<td style="white-space:nowrap;">' +
+        '<button class="editar-btn" data-fecha="' + r.fecha + '" title="Editar este d\u00eda">\u270f\ufe0f</button> ' +
+        '<button class="eliminar-btn" data-fecha="' + r.fecha + '" title="Eliminar">&times;</button>' +
+      '</td>' +
       '</tr>';
   }).join('');
   tbody.querySelectorAll('.eliminar-btn').forEach(function(btn) {
     btn.addEventListener('click', function() { eliminarRegistro(btn.dataset.fecha); });
+  });
+  tbody.querySelectorAll('.editar-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() { editarRegistro(btn.dataset.fecha); });
   });
 }
 
@@ -1705,13 +1793,30 @@ document.addEventListener('DOMContentLoaded', function() {
     const recogido = document.getElementById('recogido').checked;
     const otros = colectarOtros();
     if (!fecha || !llegada) { alert('Completa la fecha y hora de llegada.'); return; }
+
+    // Si veniamos editando y cambiaron la fecha, el dia viejo hay que quitarlo:
+    // si no, quedarian dos registros.
+    if (editandoFecha && editandoFecha !== fecha) {
+      var yaExiste = registros.some(function(x) { return x.fecha === fecha; });
+      if (yaExiste && !confirm('Ya hay un registro el ' + formatearFechaCorta(fecha) +
+          '.\n\nSi segu\u00eds, ese d\u00eda queda con los datos que acab\u00e1s de escribir y se ' +
+          'elimina el del ' + formatearFechaCorta(editandoFecha) + '.\n\n\u00bfSeguir?')) return;
+      eliminarRegistro(editandoFecha);
+    }
+
     agregarRegistro({ fecha: fecha, llegada: llegada, salida: salida, recogido: recogido, otros: otros });
-    document.getElementById('fecha').value = hoyStr();
-    document.getElementById('llegada').value = '07:30';
-    document.getElementById('salida').value = '';
-    document.getElementById('recogido').checked = false;
-    document.getElementById('otrosContainer').innerHTML = '';
+
+    if (editandoFecha) salirModoEdicion();
+    else {
+      document.getElementById('fecha').value = hoyStr();
+      document.getElementById('llegada').value = '07:30';
+      document.getElementById('salida').value = '';
+      document.getElementById('recogido').checked = false;
+      document.getElementById('otrosContainer').innerHTML = '';
+    }
   });
+
+  document.getElementById('btnCancelarEdicion').addEventListener('click', salirModoEdicion);
 
   document.getElementById('btnRecogerAhora').addEventListener('click', function() {
     const fecha = document.getElementById('fecha').value || hoyStr();
