@@ -7,7 +7,7 @@
 
 <!-- Instalable en el celular: "Agregar a pantalla de inicio" deja un icono propio -->
 <link rel="manifest" href="manifest.webmanifest">
-<meta name="theme-color" content="#2563eb">
+<meta name="theme-color" content="#0d9488">
 <meta name="description" content="Control de horas, transporte y pagos de la guardería de Nicolás.">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -17,30 +17,65 @@
 <meta name="apple-mobile-web-app-title" content="Guardería Nico">
 
 <style>
+  :root {
+    /* Color propio de esta app: verde azulado. El azul es de Prestamos y el
+       cobre de Mecates, asi cada una se reconoce de un vistazo. */
+    --marca:        #0d9488;
+    --marca-oscura: #0f766e;
+    --marca-clara:  #ccfbf1;
+    --marca-tenue:  #f0fdfa;
+    --ok:        #16a34a;
+    --ok-fondo:  #dcfce7;
+    --mal:       #dc2626;
+    --mal-fondo: #fee2e2;
+    --aviso:     #c2410c;
+    --texto:     #1e293b;
+    --suave:     #64748b;
+    --tenue:     #94a3b8;
+    --linea:     #e2e8f0;
+  }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f5f7fa; color: #1e293b; padding: 20px; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; color: var(--texto); padding: 20px;
+    background: var(--marca-tenue);
+    background-image: linear-gradient(180deg, #e3f5f1 0%, var(--marca-tenue) 260px, #f6f8fa 520px);
+    background-attachment: fixed; min-height: 100vh; }
   .container { max-width: 1100px; margin: 0 auto; }
-  h1 { font-size: 1.5rem; display: flex; align-items: center; gap: 8px; margin-bottom: 20px; }
+  h1 { font-size: 1.45rem; margin: 0; letter-spacing: -.01em; }
+  .app-header { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    background: linear-gradient(135deg, var(--marca-oscura) 0%, var(--marca) 55%, #14b8a6 100%);
+    color: #fff; border-radius: 16px; padding: 18px 22px; margin-bottom: 18px;
+    box-shadow: 0 6px 20px rgba(13,148,136,.25); }
+  .app-sub { font-size: 0.82rem; opacity: .9; margin-top: 2px; }
+  .app-marca { font-size: 2rem; line-height: 1; opacity: .9; }
+
+  /* cada seccion lleva una barrita del color de la app */
+  .card > h2:first-child, .card > div:first-child > h2 {
+    padding-left: 10px; border-left: 4px solid var(--marca); }
+  .saldo-ok { background: linear-gradient(135deg, #dcfce7 0%, #f3fdf6 70%); border: 1px solid #bbf7d0; }
+  .saldo-deuda { background: linear-gradient(135deg, #fee2e2 0%, #fff5f5 70%); border: 1px solid #fecaca; }
   h1 small { font-size: 0.875rem; color: #64748b; font-weight: 400; }
   h2 { font-size: 1.1rem; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
   h3 { font-size: 0.95rem; margin-bottom: 8px; }
   .card { background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
   .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  /* El saldo es un numero; las tarjetas necesitan el ancho */
+  .grid-saldo { display: grid; grid-template-columns: minmax(220px, 300px) 1fr; gap: 16px; align-items: start; }
   .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
 
   .form-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+  .fila-horas { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .form-group { display: flex; flex-direction: column; gap: 4px; }
   .form-group label { font-size: 0.8rem; font-weight: 600; color: #475569; text-transform: uppercase; letter-spacing: .03em; }
   .form-group input[type="date"],
   .form-group input[type="time"],
   .form-group input[type="number"],
   .form-group input[type="text"] { padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.9rem; }
-  .form-group input[type="checkbox"] { width: 18px; height: 18px; accent-color: #3b82f6; }
+  .form-group input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--marca); }
   .form-group select { padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.9rem; background: #fff; }
 
   .btn { padding: 8px 18px; border: none; border-radius: 8px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all .15s; display: inline-flex; align-items: center; gap: 6px; }
-  .btn-primary { background: #3b82f6; color: #fff; }
-  .btn-primary:hover { background: #2563eb; }
+  .btn-primary { background: var(--marca); color: #fff; }
+  .btn-primary:hover { background: var(--marca-oscura); }
   .btn-success { background: #22c55e; color: #fff; }
   .btn-success:hover { background: #16a34a; }
   .btn-warning { background: #f59e0b; color: #fff; }
@@ -61,8 +96,8 @@
   .badge { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 0.75rem; font-weight: 600; }
   .badge-si { background: #dcfce7; color: #166534; }
   .badge-no { background: #f1f5f9; color: #64748b; }
-  .badge-pendiente { background: #fef3c7; color: #92400e; }
-  .badge-pagado { background: #dbeafe; color: #1e40af; }
+  .badge-pendiente { background: var(--mal-fondo); color: var(--mal); }
+  .badge-pagado { background: var(--ok-fondo); color: #166534; }
   .editar-btn {
   background: none; border: none; cursor: pointer; font-size: 1rem;
   padding: 2px 4px; border-radius: 4px; line-height: 1;
@@ -74,6 +109,36 @@
 .fila-subtotal td { background: #eff6ff; font-size: 0.82rem; color: #1e40af; border-top: 1px solid #bfdbfe; }
 .eliminar-btn { background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 1rem; padding: 2px 6px; border-radius: 4px; }
   .eliminar-btn:hover { color: #ef4444; background: #fef2f2; }
+
+  /* ---- Tarjetas por dia (reemplazan la tabla, que no cabia en el celular) ---- */
+  .dias-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 12px; }
+  .dia-card { border: 1px solid var(--linea); border-left: 4px solid var(--marca);
+    border-radius: 12px; padding: 12px 14px; background: #fff; transition: box-shadow .15s; }
+  .dia-card:hover { box-shadow: 0 2px 10px rgba(0,0,0,.07); }
+  .dia-card.finde { border-left-color: var(--aviso); background: #fffbf7; }
+  .dia-card.editando { border-left-color: #f59e0b; background: #fffbeb; }
+  .dia-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  .dia-fecha { font-size: 1rem; font-weight: 700; }
+  .dia-fecha .dia-nombre { color: var(--marca-oscura); text-transform: capitalize; }
+  .dia-card.finde .dia-fecha .dia-nombre { color: var(--aviso); }
+  .dia-total { font-size: 1.25rem; font-weight: 800; white-space: nowrap; }
+  .dia-sub { font-size: 0.82rem; color: var(--suave); margin-top: 2px; }
+  .dia-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+  .chip { font-size: 0.72rem; font-weight: 600; padding: 2px 9px; border-radius: 99px;
+    background: var(--marca-clara); color: var(--marca-oscura); }
+  .chip-otro { background: #f1f5f9; color: var(--suave); }
+  .dia-acciones { display: flex; justify-content: flex-end; gap: 2px; margin-top: 6px; }
+  .dia-firma { font-size: 0.7rem; color: var(--tenue); margin-top: 6px; }
+
+  /* bloques dentro de un dia con mas de una entrada */
+  .bloques { margin-top: 10px; border-top: 1px dashed var(--linea); }
+  .bloque { display: flex; align-items: center; gap: 8px; padding: 7px 0;
+    border-bottom: 1px dashed var(--linea); }
+  .bloque:last-child { border-bottom: none; }
+  .bloque-info { flex: 1; min-width: 0; }
+  .bloque-horas { font-size: 0.86rem; font-weight: 600; }
+  .bloque-meta { font-size: 0.72rem; color: var(--suave); }
+  .bloque-monto { font-size: 0.86rem; font-weight: 700; white-space: nowrap; }
 
   .export-actions { display: flex; flex-wrap: wrap; gap: 8px; }
   .vacio { text-align: center; padding: 40px 20px; color: #94a3b8; }
@@ -124,40 +189,54 @@
   .rango-custom input[type="date"] { padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; }
 
   @media (max-width: 700px) {
-    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    .grid-2, .grid-3, .grid-saldo { grid-template-columns: 1fr; }
     body { padding: 12px; }
     .card { padding: 14px; }
-    .form-row { flex-direction: column; }
+    /* align-items:end en columna empujaba todo contra el borde derecho */
+    .form-row { flex-direction: column; align-items: stretch; }
+    .form-group { width: 100%; }
+    .form-group input, .form-group select { width: 100%; }
+    .form-row .btn { width: 100%; justify-content: center; }
     .periodo-header { flex-direction: column; align-items: start; }
     .otro-item { flex-wrap: wrap; }
     .otro-item input[type="number"] { width: 100%; }
+    h1 { font-size: 1.25rem; }
+    .dia-total { font-size: 1.15rem; }
   }
 </style>
 </head>
 <body>
 <div class="container">
 
-<h1>Control de Guarder&iacute;a <small>Nicol&aacute;s</small></h1>
+<header class="app-header">
+  <div>
+    <h1>Control de Guarder&iacute;a</h1>
+    <div class="app-sub">Nicol&aacute;s &middot; horas, transporte y pagos</div>
+  </div>
+  <div class="app-marca">&#x1f3eb;</div>
+</header>
 
 <div class="card">
   <h2>&#x2795; Registro diario</h2>
   <form id="formRegistro">
     <div class="form-row">
       <div class="form-group">
-        <label for="fecha">Fecha <span id="diaSemanaFecha" style="font-weight:700;text-transform:capitalize;color:#2563eb;"></span> <span id="avisoBloques" style="font-weight:400;color:#2563eb;font-size:0.72rem;"></span></label>
+        <label for="fecha">Fecha <span id="diaSemanaFecha" style="font-weight:700;text-transform:capitalize;color:var(--marca-oscura);letter-spacing:0;"></span> <span id="avisoBloques" style="font-weight:600;color:var(--marca-oscura);font-size:0.7rem;text-transform:none;letter-spacing:0;"></span></label>
         <input type="date" id="fecha" required>
       </div>
-      <div class="form-group">
-        <label for="llegada">Hora de llegada</label>
-        <input type="time" id="llegada" required>
-      </div>
-      <div class="form-group">
-        <label for="salida">Hora de salida</label>
-        <input type="time" id="salida">
+      <div class="fila-horas">
+        <div class="form-group">
+          <label for="llegada">Llegada</label>
+          <input type="time" id="llegada" required>
+        </div>
+        <div class="form-group">
+          <label for="salida">Salida</label>
+          <input type="time" id="salida">
+        </div>
       </div>
       <div class="form-group">
         <label>
-          <input type="checkbox" id="recogido" style="accent-color:#f59e0b">
+          <input type="checkbox" id="recogido">
           &#x1f69c; Transporte (+&cent;1,500)
         </label>
       </div>
@@ -175,7 +254,6 @@
     </div>
     <div class="form-row mt-8">
       <button type="submit" class="btn btn-primary" id="btnGuardarRegistro">&#x2795; Agregar registro</button>
-      <button type="button" class="btn btn-success" id="btnRecogerAhora">&#x23f0; Recoger ahora</button>
       <button type="button" class="btn btn-outline" id="btnCancelarEdicion" style="display:none;">Cancelar</button>
     </div>
   </form>
@@ -215,38 +293,24 @@
   <div id="vacioPeriodos" class="vacio" style="display:none;">No hay per&iacute;odos para mostrar.</div>
 </div>
 
-<div class="grid-2">
-  <div class="card">
+<div class="grid-saldo">
+  <div class="card" id="tarjetaSaldo">
     <h2>&#x1f4b0; Saldo pendiente</h2>
     <div id="saldoContainer" style="text-align:center;padding:10px 0;">
       <div style="font-size:0.85rem;color:#64748b;margin-bottom:4px;">
-        Total cargos: <span id="saldoTotalCargos">&cent;0</span>
+        Sin pagar: <span id="saldoTotalCargos">&cent;0</span>
         &nbsp;|&nbsp;
-        Pagado: <span id="saldoTotalPagado">&cent;0</span>
+        Ya cobrado: <span id="saldoTotalPagado">&cent;0</span>
       </div>
       <div id="saldoNumero" style="font-size:2.5rem;font-weight:800;color:#dc2626;">&cent;0</div>
     </div>
   </div>
   <div class="card">
-    <h2>&#x1f4c5; Lista de eventos</h2>
-    <div class="tabla-wrap">
-      <table>
-        <thead><tr>
-          <th>Fecha</th>
-          <th>Llegada</th>
-          <th>Salida</th>
-          <th>Horas</th>
-          <th>Transporte</th>
-          <th>Gda (&cent;)</th>
-          <th>Transp (&cent;)</th>
-          <th>Otros</th>
-          <th>Total (&cent;)</th>
-          <th>Anot&oacute;</th>
-          <th></th>
-        </tr></thead>
-        <tbody id="tablaEventos"></tbody>
-      </table>
+    <div class="flex items-center justify-between flex-wrap gap-8 mb-8">
+      <h2 style="margin-bottom:0;">&#x1f4c5; Lista de eventos</h2>
+      <span id="avisoPagados"></span>
     </div>
+    <div class="dias-grid" id="tablaEventos"></div>
     <div id="vacioEventos" class="vacio" style="display:none;">No hay eventos registrados.</div>
   </div>
 </div>
@@ -904,7 +968,7 @@ function actualizarDiaSemanaForm() {
   if (av) {
     var n = registros.filter(function(r) { return r.fecha === inp.value; }).length;
     av.textContent = (n > 0 && !editandoId)
-      ? '\u00b7 ya hay ' + n + (n === 1 ? ' bloque; este se agrega aparte' : ' bloques; este se agrega aparte')
+      ? '\u00b7 ' + n + (n === 1 ? ' bloque ese d\u00eda' : ' bloques ese d\u00eda')
       : '';
   }
 }
@@ -935,17 +999,9 @@ function editarRegistro(id) {
   document.getElementById('bannerEdicion').style.display = 'block';
   document.getElementById('btnGuardarRegistro').innerHTML = '\ud83d\udcbe Guardar cambios';
   document.getElementById('btnCancelarEdicion').style.display = '';
-  document.getElementById('btnRecogerAhora').style.display = 'none';
 
-  // resaltar la fila que se esta editando
-  document.querySelectorAll('#tablaEventos tr').forEach(function(tr) {
-    tr.classList.remove('fila-editando');
-  });
-  var btn = document.querySelector('.editar-btn[data-id="' + id + '"]');
-  if (btn) {
-    var tr = btn.closest('tr');
-    if (tr) tr.classList.add('fila-editando');
-  }
+  // resaltar la tarjeta que se esta editando
+  if (window.renderAll) renderAll();
 
   var form = document.getElementById('formRegistro');
   if (form && form.scrollIntoView) form.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -958,108 +1014,208 @@ function salirModoEdicion() {
   document.getElementById('bannerEdicion').style.display = 'none';
   document.getElementById('btnGuardarRegistro').innerHTML = '\u2795 Agregar registro';
   document.getElementById('btnCancelarEdicion').style.display = 'none';
-  document.getElementById('btnRecogerAhora').style.display = '';
   document.getElementById('fecha').value = hoyStr();
   document.getElementById('llegada').value = '07:30';
   document.getElementById('salida').value = '';
   document.getElementById('recogido').checked = false;
   document.getElementById('otrosContainer').innerHTML = '';
   actualizarDiaSemanaForm();
-  document.querySelectorAll('#tablaEventos tr').forEach(function(tr) {
-    tr.classList.remove('fila-editando');
-  });
+  if (window.renderAll) renderAll();
+}
+
+// --- Semanas ya pagadas -----------------------------------------------------
+// Al cobrar una semana sus dias estorban en la lista, y si el monto pagado no
+// calza exacto con los cargos quedaba un resto arrastrandose en el saldo.
+// Se ocultan (no se borran) y el saldo cuenta solo lo NO pagado.
+var verPagados = false;
+
+function tipoPeriodoActual() {
+  var el = document.getElementById('tipoPeriodo');
+  return el ? el.value : 'semanal';
+}
+function registroEstaPagado(r) {
+  var p = obtenerPeriodo(r.fecha, tipoPeriodoActual());
+  return !!pagosPeriodo[getPeriodKey(p)];
+}
+function registrosVisibles() {
+  return verPagados ? registros : registros.filter(function(r) { return !registroEstaPagado(r); });
 }
 
 function renderEventos() {
-  var tbody = document.getElementById('tablaEventos');
+  var cont = document.getElementById('tablaEventos');
   var vacio = document.getElementById('vacioEventos');
-  var sorted = [...registros].sort(function(a, b) {
-    if (a.fecha !== b.fecha) return b.fecha.localeCompare(a.fecha);
-    return (a.llegada || '').localeCompare(b.llegada || '');   // dentro del dia, por hora
-  });
-  if (sorted.length === 0) {
-    tbody.innerHTML = '';
+
+  var lista = registrosVisibles();
+  var ocultos = registros.length - lista.length;
+  var avisoOcultos = document.getElementById('avisoPagados');
+  if (avisoOcultos) {
+    avisoOcultos.innerHTML = ocultos > 0
+      ? '<button type="button" class="btn btn-outline btn-sm" id="btnVerPagados">' +
+        (verPagados ? '\ud83d\udc41 Ocultar ' : '\ud83d\udc41 Ver ') + ocultos +
+        (ocultos === 1 ? ' d\u00eda ya pagado' : ' d\u00edas ya pagados') + '</button>'
+      : (verPagados && registros.length
+          ? '<button type="button" class="btn btn-outline btn-sm" id="btnVerPagados">\ud83d\udc41 Ocultar los ya pagados</button>'
+          : '');
+    var bv = document.getElementById('btnVerPagados');
+    if (bv) bv.onclick = function() { verPagados = !verPagados; renderAll(); };
+  }
+
+  if (lista.length === 0) {
+    cont.innerHTML = '';
+    vacio.textContent = registros.length
+      ? 'Todo lo registrado ya est\u00e1 pagado. \u00a1Al d\u00eda!'
+      : 'No hay eventos registrados.';
     vacio.style.display = 'block';
     return;
   }
   vacio.style.display = 'none';
 
-  // Cuantos bloques hay por dia: si hay mas de uno, el dia lleva subtotal.
-  var porDia = {};
-  sorted.forEach(function(r) { porDia[r.fecha] = (porDia[r.fecha] || 0) + 1; });
-
-  var filas = [];
-  sorted.forEach(function(r, i) {
-    var esUltimoDelDia = (i === sorted.length - 1) || (sorted[i + 1].fecha !== r.fecha);
-    filas.push(filaRegistro(r, porDia[r.fecha] > 1));
-    if (porDia[r.fecha] > 1 && esUltimoDelDia) filas.push(filaSubtotal(r.fecha));
+  // Agrupar por dia: el dia manda, los bloques van adentro.
+  var dias = {};
+  lista.forEach(function(r) {
+    (dias[r.fecha] = dias[r.fecha] || []).push(r);
   });
-  tbody.innerHTML = filas.join('');
+  var fechasOrdenadas = Object.keys(dias).sort(function(a, b) { return b.localeCompare(a); });
 
-  tbody.querySelectorAll('.eliminar-btn').forEach(function(btn) {
+  cont.innerHTML = fechasOrdenadas.map(function(f) {
+    var bloques = dias[f].slice().sort(function(a, b) {
+      return (a.llegada || '').localeCompare(b.llegada || '');
+    });
+    return bloques.length === 1 ? tarjetaDiaSimple(bloques[0]) : tarjetaDiaVarios(f, bloques);
+  }).join('');
+
+  cont.querySelectorAll('.eliminar-btn').forEach(function(btn) {
     btn.addEventListener('click', function() { eliminarRegistro(btn.dataset.id); });
   });
-  tbody.querySelectorAll('.editar-btn').forEach(function(btn) {
+  cont.querySelectorAll('.editar-btn').forEach(function(btn) {
     btn.addEventListener('click', function() { editarRegistro(btn.dataset.id); });
   });
 }
 
-// Una fila de la tabla. `enGrupo` es true cuando ese dia tiene varios bloques.
-function filaRegistro(r, enGrupo) {
-    var otrosStr = r.otros && r.otros.length
-      ? r.otros.map(function(o) { return o.descripcion + ' ' + formatearMoneda(o.monto); }).join('<br>')
-      : '-';
-    var clsFin = esFinDeSemana(r.fecha) ? ' fila-finde' : '';
-    var clsGrupo = enGrupo ? ' fila-engrupo' : '';
-    return '<tr class="' + (clsFin + clsGrupo).trim() + '" data-id="' + idRegistro(r) + '">' +
-      '<td style="white-space:nowrap;">' + formatearFechaConDia(r.fecha) + '</td>' +
-      '<td>' + formatearHora(r.llegada) + '</td>' +
-      '<td>' + (r.salida ? formatearHora(r.salida) : '-') + '</td>' +
-      '<td>' + (r.horas ? r.horas.toFixed(1) : '-') + '</td>' +
-      '<td><span class="badge ' + (r.recogido ? 'badge-si' : 'badge-no') + '">' + (r.recogido ? 'S\u00ED' : 'No') + '</span></td>' +
-      '<td>' + formatearMoneda(r.costoGuarderia || 0) + '</td>' +
-      '<td>' + formatearMoneda(r.costoRecogida || 0) + '</td>' +
-      '<td>' + otrosStr + '</td>' +
-      '<td><strong>' + formatearMoneda(r.total || 0) + '</strong></td>' +
-      '<td>' + firmaAutor(r) + '</td>' +
-      '<td style="white-space:nowrap;">' +
-        '<button class="editar-btn" data-id="' + idRegistro(r) + '" title="Editar este bloque">\u270f\ufe0f</button> ' +
-        '<button class="eliminar-btn" data-id="' + idRegistro(r) + '" title="Eliminar este bloque">&times;</button>' +
-      '</td>' +
-      '</tr>';
+// Horario legible: "11:30 a. m. a 4:00 p. m." o "11:30 a. m., sin salida"
+function rangoHorario(r) {
+  if (!r.salida) return formatearHora(r.llegada) + ', sin salida';
+  return formatearHora(r.llegada) + ' a ' + formatearHora(r.salida);
 }
 
-// Linea que suma el dia cuando tiene mas de un bloque.
-function filaSubtotal(fecha) {
-  var delDia = registros.filter(function(r) { return r.fecha === fecha; });
-  var horas = delDia.reduce(function(s, r) { return s + (r.horas || 0); }, 0);
-  var total = delDia.reduce(function(s, r) { return s + (r.total || 0); }, 0);
-  return '<tr class="fila-subtotal">' +
-    '<td colspan="3" style="text-align:right;">Total del d\u00eda (' + delDia.length + ' bloques)</td>' +
-    '<td>' + horas.toFixed(1) + '</td>' +
-    '<td colspan="4"></td>' +
-    '<td><strong>' + formatearMoneda(total) + '</strong></td>' +
-    '<td colspan="2"></td>' +
-    '</tr>';
+// Etiquetas pequenas: transporte y gastos extra. Lo tecnico no se muestra aqui.
+function chipsDe(r) {
+  var c = [];
+  if (r.recogido) c.push('<span class="chip">🚜 Transporte</span>');
+  (r.otros || []).forEach(function(o) {
+    c.push('<span class="chip chip-otro">' + escaparHtml(o.descripcion) + ' ' + formatearMoneda(o.monto) + '</span>');
+  });
+  return c.length ? '<div class="dia-chips">' + c.join('') + '</div>' : '';
 }
+
+function botonesDe(r) {
+  var id = idRegistro(r);
+  return '<button class="editar-btn" data-id="' + id + '" title="Editar">✏️</button>' +
+         '<button class="eliminar-btn" data-id="' + id + '" title="Eliminar">&times;</button>';
+}
+
+function clasesDia(fecha) {
+  var c = 'dia-card';
+  if (esFinDeSemana(fecha)) c += ' finde';
+  return c;
+}
+
+// Dia con un solo bloque
+function tarjetaDiaSimple(r) {
+  var editando = (typeof editandoId !== 'undefined' && editandoId === idRegistro(r));
+  return '<div class="' + clasesDia(r.fecha) + (editando ? ' editando' : '') + '">' +
+    '<div class="dia-head">' +
+      '<div class="dia-fecha">' + encabezadoFecha(r.fecha) + '</div>' +
+      '<div class="dia-total">' + formatearMoneda(r.total || 0) + '</div>' +
+    '</div>' +
+    '<div class="dia-sub">' + rangoHorario(r) +
+      (r.horas ? ' · ' + r.horas.toFixed(1) + ' h' : '') + '</div>' +
+    chipsDe(r) +
+    firmaLinea(r) +
+    '<div class="dia-acciones">' + botonesDe(r) + '</div>' +
+  '</div>';
+}
+
+// Dia con varios bloques: la cabecera suma el dia
+function tarjetaDiaVarios(fecha, bloques) {
+  var horas = bloques.reduce(function(s, r) { return s + (r.horas || 0); }, 0);
+  var total = bloques.reduce(function(s, r) { return s + (r.total || 0); }, 0);
+  var algunoEditando = bloques.some(function(r) {
+    return typeof editandoId !== 'undefined' && editandoId === idRegistro(r);
+  });
+
+  var filas = bloques.map(function(r) {
+    var ed = (typeof editandoId !== 'undefined' && editandoId === idRegistro(r));
+    return '<div class="bloque"' + (ed ? ' style="background:#fffbeb;"' : '') + '>' +
+      '<div class="bloque-info">' +
+        '<div class="bloque-horas">' + rangoHorario(r) + '</div>' +
+        '<div class="bloque-meta">' + (r.horas ? r.horas.toFixed(1) + ' h' : 'sin horas') +
+          (r.recogido ? ' · 🚜 transporte' : '') +
+          ((r.otros && r.otros.length) ? ' · ' + r.otros.length + ' gasto' + (r.otros.length > 1 ? 's' : '') : '') +
+          firmaTexto(r) +
+        '</div>' +
+      '</div>' +
+      '<div class="bloque-monto">' + formatearMoneda(r.total || 0) + '</div>' +
+      '<div>' + botonesDe(r) + '</div>' +
+    '</div>';
+  }).join('');
+
+  return '<div class="' + clasesDia(fecha) + (algunoEditando ? ' editando' : '') + '">' +
+    '<div class="dia-head">' +
+      '<div class="dia-fecha">' + encabezadoFecha(fecha) + '</div>' +
+      '<div class="dia-total">' + formatearMoneda(total) + '</div>' +
+    '</div>' +
+    '<div class="dia-sub">' + bloques.length + ' bloques · ' + horas.toFixed(1) + ' h en total</div>' +
+    '<div class="bloques">' + filas + '</div>' +
+  '</div>';
+}
+
+// "Mié 4 nov"
+function encabezadoFecha(fecha) {
+  var d = fechaLocal(fecha);
+  if (!d) return fecha;
+  var MESES_CORTOS = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  return '<span class="dia-nombre">' + diaSemanaCorto(fecha) + '</span> ' +
+         d.getDate() + ' ' + MESES_CORTOS[d.getMonth()];
+}
+
+// Quien anoto: se muestra chiquito y apagado, no como columna.
+function firmaTexto(r) {
+  var a = (r.autor || '').trim();
+  var e = (r.editadoPor || '').trim();
+  if (!a && !e) return '';
+  if (!a) a = e;
+  return ' · ' + escaparHtml(a) + (e && e !== a ? ' (edit. ' + escaparHtml(e) + ')' : '');
+}
+function firmaLinea(r) {
+  var t = firmaTexto(r);
+  return t ? '<div class="dia-firma">Anotó' + t + '</div>' : '';
+}
+
 
 function renderSaldoPendiente() {
-  var totalCargos = registros.reduce(function(s, r) { return s + (r.total || 0); }, 0);
+  // Solo los dias de semanas NO pagadas. Asi, al cobrar una semana el saldo
+  // queda limpio aunque el monto pagado no calce al colon con los cargos.
+  var pendientes = registros.filter(function(r) { return !registroEstaPagado(r); });
+  var totalCargos = pendientes.reduce(function(s, r) { return s + (r.total || 0); }, 0);
   var totalPagado = 0;
   var pagosArr = Object.values(pagosPeriodo);
   for (var i = 0; i < pagosArr.length; i++) totalPagado += (pagosArr[i].monto || 0);
-  var saldo = totalCargos - totalPagado;
+  var saldo = totalCargos;
   document.getElementById('saldoTotalCargos').textContent = formatearMoneda(totalCargos);
   document.getElementById('saldoTotalPagado').textContent = formatearMoneda(totalPagado);
   var el = document.getElementById('saldoNumero');
+  var tarjeta = document.getElementById('tarjetaSaldo');
   if (saldo <= 0) {
     el.textContent = '\u00a1Todo al d\u00eda!';
-    el.style.color = '#16a34a';
+    el.style.color = '#15803d';
     el.style.fontSize = '1.8rem';
+    if (tarjeta) tarjeta.className = 'card saldo-ok';
   } else {
     el.textContent = formatearMoneda(saldo);
-    el.style.color = '#dc2626';
+    el.style.color = '#b91c1c';
     el.style.fontSize = '2.5rem';
+    if (tarjeta) tarjeta.className = 'card saldo-deuda';
   }
 }
 
@@ -1269,8 +1425,8 @@ function generarReporte() {
     '.header h1 { font-size: 1.4rem; }' +
     '.header .sub { color: #64748b; font-size: 0.85rem; margin-top: 4px; }' +
     '.badge { display: inline-block; padding: 3px 12px; border-radius: 99px; font-size: 0.8rem; font-weight: 700; }' +
-    '.badge-pendiente { background: #fef3c7; color: #92400e; }' +
-    '.badge-pagado { background: #dbeafe; color: #1e40af; }' +
+    '.badge-pendiente { background: #fee2e2; color: #dc2626; }' +
+    '.badge-pagado { background: #dcfce7; color: #166534; }' +
     '.periodo-card { border: 2px solid #e2e8f0; border-radius: 10px; margin-bottom: 20px; page-break-inside: avoid; }' +
     '.periodo-title { padding: 12px 16px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; font-weight: 600; font-size: 1rem; }' +
     '.periodo-body { padding: 12px 16px; }' +
@@ -1699,6 +1855,13 @@ function aplicarEstado(merged) {
   guardarConfig();
   var elFecha = document.getElementById('inputFechaInicio');
   if (elFecha) elFecha.value = fechaInicio;
+  // Si otro equipo borro el bloque que estabamos editando, cerrar el formulario:
+  // si no, al guardar lo recrearia sin que nadie lo pidiera.
+  if (typeof editandoId !== 'undefined' && editandoId &&
+      !registros.some(function(x) { return idRegistro(x) === editandoId; })) {
+    salirModoEdicion();
+    return;                      // salirModoEdicion ya repinta
+  }
   if (window.renderAll) renderAll();
 }
 
@@ -1972,25 +2135,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   document.getElementById('btnCancelarEdicion').addEventListener('click', salirModoEdicion);
 
-  document.getElementById('btnRecogerAhora').addEventListener('click', function() {
-    const fecha = document.getElementById('fecha').value || hoyStr();
-    const llegada = document.getElementById('llegada').value;
-    if (!llegada) { alert('Primero ingresa la hora de llegada.'); return; }
-    const otros = colectarOtros();
-    // Si ese dia hay un bloque sin hora de salida, se le pone la de ahora en vez
-    // de crear otro. Es lo que hacia antes, cuando solo cabia un registro por dia.
-    var abierto = registros.filter(function(x) { return x.fecha === fecha && !x.salida; })
-                           .sort(function(a, b) { return (b.llegada || '').localeCompare(a.llegada || ''); })[0];
-    var datos = { fecha: fecha, llegada: llegada, salida: horaActualStr(), recogido: true, otros: otros };
-    if (abierto) { datos.id = idRegistro(abierto); datos.llegada = abierto.llegada; }
-    agregarRegistro(datos);
-    document.getElementById('fecha').value = hoyStr();
-    document.getElementById('llegada').value = '07:30';
-    document.getElementById('salida').value = '';
-    document.getElementById('recogido').checked = false;
-    document.getElementById('otrosContainer').innerHTML = '';
-  actualizarDiaSemanaForm();
-  });
+  // El boton "Recoger ahora" se quito: Jero nunca lo usaba.
 
   document.getElementById('btnAgregarOtro').addEventListener('click', function() {
     agregarOtroForm('', '');
