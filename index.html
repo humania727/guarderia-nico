@@ -70,6 +70,8 @@
 .editar-btn:hover { background: #fef3c7; }
 .fila-editando { background: #fffbeb !important; }
 .fila-finde { background: #fff7ed; }
+.fila-engrupo td:first-child { border-left: 3px solid #93c5fd; }
+.fila-subtotal td { background: #eff6ff; font-size: 0.82rem; color: #1e40af; border-top: 1px solid #bfdbfe; }
 .eliminar-btn { background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 1rem; padding: 2px 6px; border-radius: 4px; }
   .eliminar-btn:hover { color: #ef4444; background: #fef2f2; }
 
@@ -142,7 +144,7 @@
   <form id="formRegistro">
     <div class="form-row">
       <div class="form-group">
-        <label for="fecha">Fecha <span id="diaSemanaFecha" style="font-weight:700;text-transform:capitalize;color:#2563eb;"></span></label>
+        <label for="fecha">Fecha <span id="diaSemanaFecha" style="font-weight:700;text-transform:capitalize;color:#2563eb;"></span> <span id="avisoBloques" style="font-weight:400;color:#2563eb;font-size:0.72rem;"></span></label>
         <input type="date" id="fecha" required>
       </div>
       <div class="form-group">
@@ -575,14 +577,20 @@ function sanearTombstones() {
     if (pagosPeriodo[k] && !pagosPeriodo[k]._ts) { pagosPeriodo[k]._ts = ahora; cambio = true; }
   });
 
-  if (!tombstones) tombstones = { registros: {}, pagos: {} };
+  if (!tombstones) tombstones = { registros: {}, pagos: {}, ids: {} };
   if (!tombstones.registros) tombstones.registros = {};
   if (!tombstones.pagos) tombstones.pagos = {};
+  if (!tombstones.ids) tombstones.ids = {};
 
   registros.forEach(function(r) {
+    asegurarId(r);
     if (tombstones.registros[r.fecha] !== undefined) {
-      console.warn('[SANEO] Lapida obsoleta descartada para', r.fecha, '(el registro existe)');
+      console.warn('[SANEO] Lapida vieja (por fecha) descartada para', r.fecha, '(hay registros ese dia)');
       delete tombstones.registros[r.fecha];
+      cambio = true;
+    }
+    if (tombstones.ids[r.id] !== undefined) {
+      delete tombstones.ids[r.id];
       cambio = true;
     }
   });
@@ -594,6 +602,23 @@ function sanearTombstones() {
   });
 
   if (cambio) { guardarRegistros(); guardarPagos(); guardarTombstones(); }
+}
+
+// --- Identidad de un registro -----------------------------------------------
+// Antes era la fecha (y por eso solo cabia un registro por dia). Ahora es `id`.
+// Para registros viejos sin id, se deriva uno DETERMINISTA a partir de fecha y
+// hora de llegada: asi los tres celulares calculan el mismo id para el mismo
+// registro y no se duplica al sincronizar.
+function idRegistro(r) {
+  if (r.id) return r.id;
+  return 'v1_' + r.fecha + '_' + (r.llegada || '');
+}
+function asegurarId(r) {
+  if (!r.id) r.id = idRegistro(r);
+  return r.id;
+}
+function nuevoId() {
+  return Date.now() + '_' + Math.random().toString(36).slice(2, 6);
 }
 
 function guardarRegistros() {
@@ -625,9 +650,10 @@ function cargarTombstones() {
     var raw = localStorage.getItem(KEY_TOMBSTONES);
     if (raw) tombstones = JSON.parse(raw);
   } catch {}
-  if (!tombstones || typeof tombstones !== 'object') tombstones = { registros: {}, pagos: {} };
+  if (!tombstones || typeof tombstones !== 'object') tombstones = { registros: {}, pagos: {}, ids: {} };
   tombstones.registros = tombstones.registros || {};
   tombstones.pagos = tombstones.pagos || {};
+  tombstones.ids = tombstones.ids || {};
 }
 
 function guardarTombstones() {
@@ -636,7 +662,7 @@ function guardarTombstones() {
 
 // CRUD registros
 function agregarRegistro(r) {
-  if (!r.id) r.id = Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+  if (!r.id) r.id = nuevoId();
   r.horas = calcularHorasDecimal(r.llegada, r.salida);
   r.costoGuarderia = calcularCostoGuarderia(r.horas);
   r.costoRecogida = calcularCostoRecogida(r.recogido);
@@ -644,7 +670,8 @@ function agregarRegistro(r) {
   const totalOtros = r.otros.reduce((s, o) => s + (parseFloat(o.monto) || 0), 0);
   r.total = r.costoGuarderia + r.costoRecogida + totalOtros;
   r._ts = Date.now();
-  const idx = registros.findIndex(ex => ex.fecha === r.fecha);
+  // Se busca por id: sin id es un bloque NUEVO, aunque ya haya otro ese mismo dia.
+  const idx = r.id ? registros.findIndex(ex => idRegistro(ex) === r.id) : -1;
   var quien = (typeof nombreUsuario === 'function' ? nombreUsuario() : '') || '';
   if (idx >= 0) {
     r.autor = registros[idx].autor || quien;       // quien lo creo se conserva
@@ -654,6 +681,7 @@ function agregarRegistro(r) {
     if (quien) { r.autor = quien; r.editadoPor = quien; }
     registros.push(r);
   }
+  if (tombstones.ids[r.id]) delete tombstones.ids[r.id];
   if (tombstones.registros[r.fecha]) delete tombstones.registros[r.fecha];
   guardarTombstones();
   guardarRegistros();
@@ -661,10 +689,10 @@ function agregarRegistro(r) {
   scheduleAutoSync();
 }
 
-function eliminarRegistro(fecha) {
-  if (typeof editandoFecha !== 'undefined' && editandoFecha === fecha) salirModoEdicion();
-  registros = registros.filter(r => r.fecha !== fecha);
-  tombstones.registros[fecha] = Date.now();
+function eliminarRegistro(id) {
+  if (typeof editandoId !== 'undefined' && editandoId === id) salirModoEdicion();
+  registros = registros.filter(r => idRegistro(r) !== id);
+  tombstones.ids[id] = Date.now();
   guardarTombstones();
   guardarRegistros();
   renderAll();
@@ -674,7 +702,7 @@ function eliminarRegistro(fecha) {
 function limpiarDatos() {
   if (!confirm('¿Estás seguro? Se borrarán TODOS los registros, pagos y configuración.')) return;
   var ts = Date.now();
-  registros.forEach(function(r) { tombstones.registros[r.fecha] = ts; });
+  registros.forEach(function(r) { tombstones.ids[idRegistro(r)] = ts; });
   Object.keys(pagosPeriodo).forEach(function(k) { tombstones.pagos[k] = ts; });
   registros = [];
   pagosPeriodo = {};
@@ -852,7 +880,7 @@ function escaparHtml(s) {
 // Edicion de un dia ya registrado
 // El formulario es el mismo de siempre; solo cambia de modo.
 // ---------------------------------------------------------------------------
-var editandoFecha = null;   // null = agregando, '2026-08-04' = editando ese dia
+var editandoId = null;   // null = agregando un bloque nuevo; si no, el id que se edita
 
 function resumenCorto(r) {
   if (!r) return '';
@@ -870,13 +898,22 @@ function actualizarDiaSemanaForm() {
   var nombre = diaSemana(inp.value);
   el.textContent = nombre ? '\u2014 ' + nombre : '';
   el.style.color = esFinDeSemana(inp.value) ? '#c2410c' : '#2563eb';
+
+  // Avisar si ese dia ya tiene bloques, para que nadie crea que los esta pisando
+  var av = document.getElementById('avisoBloques');
+  if (av) {
+    var n = registros.filter(function(r) { return r.fecha === inp.value; }).length;
+    av.textContent = (n > 0 && !editandoId)
+      ? '\u00b7 ya hay ' + n + (n === 1 ? ' bloque; este se agrega aparte' : ' bloques; este se agrega aparte')
+      : '';
+  }
 }
 
-function editarRegistro(fecha) {
-  var r = registros.find(function(x) { return x.fecha === fecha; });
-  if (!r) { alert('Ese d\u00eda ya no est\u00e1 en la lista.'); return; }
+function editarRegistro(id) {
+  var r = registros.find(function(x) { return idRegistro(x) === id; });
+  if (!r) { alert('Ese registro ya no est\u00e1 en la lista.'); return; }
 
-  editandoFecha = fecha;
+  editandoId = id;
 
   document.getElementById('fecha').value = r.fecha;
   document.getElementById('llegada').value = r.llegada || '';
@@ -888,7 +925,11 @@ function editarRegistro(fecha) {
   (r.otros || []).forEach(function(o) { agregarOtroForm(o.descripcion, o.monto); });
 
   document.getElementById('bannerEdicionFecha').textContent = formatearFechaLarga(r.fecha);
+  var nDia = registros.filter(function(x) { return x.fecha === r.fecha; }).length;
   document.getElementById('bannerEdicionOriginal').textContent =
+    (nDia > 1 ? '(bloque ' + (registros.filter(function(x) { return x.fecha === r.fecha; })
+        .sort(function(a, b) { return (a.llegada || '').localeCompare(b.llegada || ''); })
+        .findIndex(function(x) { return idRegistro(x) === id; }) + 1) + ' de ' + nDia + ')  ' : '') +
     'Estaba: ' + resumenCorto(r) + (r.autor ? '  (lo anot\u00f3 ' + r.autor + ')' : '');
   actualizarDiaSemanaForm();
   document.getElementById('bannerEdicion').style.display = 'block';
@@ -900,7 +941,7 @@ function editarRegistro(fecha) {
   document.querySelectorAll('#tablaEventos tr').forEach(function(tr) {
     tr.classList.remove('fila-editando');
   });
-  var btn = document.querySelector('.editar-btn[data-fecha="' + fecha + '"]');
+  var btn = document.querySelector('.editar-btn[data-id="' + id + '"]');
   if (btn) {
     var tr = btn.closest('tr');
     if (tr) tr.classList.add('fila-editando');
@@ -913,7 +954,7 @@ function editarRegistro(fecha) {
 }
 
 function salirModoEdicion() {
-  editandoFecha = null;
+  editandoId = null;
   document.getElementById('bannerEdicion').style.display = 'none';
   document.getElementById('btnGuardarRegistro').innerHTML = '\u2795 Agregar registro';
   document.getElementById('btnCancelarEdicion').style.display = 'none';
@@ -932,19 +973,45 @@ function salirModoEdicion() {
 function renderEventos() {
   var tbody = document.getElementById('tablaEventos');
   var vacio = document.getElementById('vacioEventos');
-  var sorted = [...registros].sort(function(a, b) { return b.fecha.localeCompare(a.fecha); });
+  var sorted = [...registros].sort(function(a, b) {
+    if (a.fecha !== b.fecha) return b.fecha.localeCompare(a.fecha);
+    return (a.llegada || '').localeCompare(b.llegada || '');   // dentro del dia, por hora
+  });
   if (sorted.length === 0) {
     tbody.innerHTML = '';
     vacio.style.display = 'block';
     return;
   }
   vacio.style.display = 'none';
-  tbody.innerHTML = sorted.map(function(r) {
+
+  // Cuantos bloques hay por dia: si hay mas de uno, el dia lleva subtotal.
+  var porDia = {};
+  sorted.forEach(function(r) { porDia[r.fecha] = (porDia[r.fecha] || 0) + 1; });
+
+  var filas = [];
+  sorted.forEach(function(r, i) {
+    var esUltimoDelDia = (i === sorted.length - 1) || (sorted[i + 1].fecha !== r.fecha);
+    filas.push(filaRegistro(r, porDia[r.fecha] > 1));
+    if (porDia[r.fecha] > 1 && esUltimoDelDia) filas.push(filaSubtotal(r.fecha));
+  });
+  tbody.innerHTML = filas.join('');
+
+  tbody.querySelectorAll('.eliminar-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() { eliminarRegistro(btn.dataset.id); });
+  });
+  tbody.querySelectorAll('.editar-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() { editarRegistro(btn.dataset.id); });
+  });
+}
+
+// Una fila de la tabla. `enGrupo` es true cuando ese dia tiene varios bloques.
+function filaRegistro(r, enGrupo) {
     var otrosStr = r.otros && r.otros.length
       ? r.otros.map(function(o) { return o.descripcion + ' ' + formatearMoneda(o.monto); }).join('<br>')
       : '-';
-    var clsFin = esFinDeSemana(r.fecha) ? ' class="fila-finde"' : '';
-    return '<tr' + clsFin + '>' +
+    var clsFin = esFinDeSemana(r.fecha) ? ' fila-finde' : '';
+    var clsGrupo = enGrupo ? ' fila-engrupo' : '';
+    return '<tr class="' + (clsFin + clsGrupo).trim() + '" data-id="' + idRegistro(r) + '">' +
       '<td style="white-space:nowrap;">' + formatearFechaConDia(r.fecha) + '</td>' +
       '<td>' + formatearHora(r.llegada) + '</td>' +
       '<td>' + (r.salida ? formatearHora(r.salida) : '-') + '</td>' +
@@ -956,17 +1023,24 @@ function renderEventos() {
       '<td><strong>' + formatearMoneda(r.total || 0) + '</strong></td>' +
       '<td>' + firmaAutor(r) + '</td>' +
       '<td style="white-space:nowrap;">' +
-        '<button class="editar-btn" data-fecha="' + r.fecha + '" title="Editar este d\u00eda">\u270f\ufe0f</button> ' +
-        '<button class="eliminar-btn" data-fecha="' + r.fecha + '" title="Eliminar">&times;</button>' +
+        '<button class="editar-btn" data-id="' + idRegistro(r) + '" title="Editar este bloque">\u270f\ufe0f</button> ' +
+        '<button class="eliminar-btn" data-id="' + idRegistro(r) + '" title="Eliminar este bloque">&times;</button>' +
       '</td>' +
       '</tr>';
-  }).join('');
-  tbody.querySelectorAll('.eliminar-btn').forEach(function(btn) {
-    btn.addEventListener('click', function() { eliminarRegistro(btn.dataset.fecha); });
-  });
-  tbody.querySelectorAll('.editar-btn').forEach(function(btn) {
-    btn.addEventListener('click', function() { editarRegistro(btn.dataset.fecha); });
-  });
+}
+
+// Linea que suma el dia cuando tiene mas de un bloque.
+function filaSubtotal(fecha) {
+  var delDia = registros.filter(function(r) { return r.fecha === fecha; });
+  var horas = delDia.reduce(function(s, r) { return s + (r.horas || 0); }, 0);
+  var total = delDia.reduce(function(s, r) { return s + (r.total || 0); }, 0);
+  return '<tr class="fila-subtotal">' +
+    '<td colspan="3" style="text-align:right;">Total del d\u00eda (' + delDia.length + ' bloques)</td>' +
+    '<td>' + horas.toFixed(1) + '</td>' +
+    '<td colspan="4"></td>' +
+    '<td><strong>' + formatearMoneda(total) + '</strong></td>' +
+    '<td colspan="2"></td>' +
+    '</tr>';
 }
 
 function renderSaldoPendiente() {
@@ -1063,7 +1137,8 @@ function importarJSON(file) {
             Object.keys(data.pagosPeriodo).length + ' pagos' + tieneInicio + '.\nOK = Agregar (fusionar)\nCancel = Reemplazar todo');
           if (opcion) {
             for (const r of data.registros) {
-              const idx = registros.findIndex(ex => ex.fecha === r.fecha);
+              asegurarId(r);
+              const idx = registros.findIndex(ex => idRegistro(ex) === r.id);
               if (idx >= 0) registros[idx] = r;
               else registros.push(r);
             }
@@ -1088,7 +1163,8 @@ function importarJSON(file) {
           const opcion = confirm('Formato antiguo: ' + val.length + ' registros.\nOK = Agregar\nCancel = Reemplazar');
           if (opcion) {
             for (const r of val) {
-              const idx = registros.findIndex(ex => ex.fecha === r.fecha);
+              asegurarId(r);
+              const idx = registros.findIndex(ex => idRegistro(ex) === r.id);
               if (idx >= 0) registros[idx] = r;
               else registros.push(r);
             }
@@ -1106,7 +1182,8 @@ function importarJSON(file) {
         const opcion = confirm('Formato antiguo: ' + val.length + ' registros.\nOK = Agregar\nCancel = Reemplazar');
         if (opcion) {
           for (const r of val) {
-            const idx = registros.findIndex(ex => ex.fecha === r.fecha);
+            asegurarId(r);
+            const idx = registros.findIndex(ex => idRegistro(ex) === r.id);
             if (idx >= 0) registros[idx] = r;
             else registros.push(r);
           }
@@ -1381,7 +1458,8 @@ function normalizarRemoto(raw) {
     configTs: raw.configTs || 0,
     tombstones: {
       registros: aObjeto(t.registros),
-      pagos: aObjeto(t.pagos)
+      pagos: aObjeto(t.pagos),
+      ids: aObjeto(t.ids)
     }
   };
 }
@@ -1492,7 +1570,7 @@ function subir(st) {
     pagosPeriodo: st.pagosPeriodo || {},
     fechaInicio: st.fechaInicio || '',
     configTs: st.configTs || 0,
-    tombstones: st.tombstones || { registros: {}, pagos: {} }
+    tombstones: st.tombstones || { registros: {}, pagos: {}, ids: {} }
   });
   subiendo = true;
   syncDebug.escrituras++;
@@ -1543,20 +1621,33 @@ function mergeState(local, remote) {
     tPagos[k] = Math.max(tPagos[k] || 0, remote.tombstones.pagos[k]);
   });
 
-  var regMap = {};
-  (local.registros || []).forEach(function(r) { regMap[r.fecha] = r; });
-  (remote.registros || []).forEach(function(r) {
-    var ex = regMap[r.fecha];
-    if (!ex || (r._ts || 0) > (ex._ts || 0)) regMap[r.fecha] = r;
+  // Lapidas por id (formato nuevo). Las de fecha se siguen respetando abajo.
+  var tIds = {};
+  Object.keys((local.tombstones && local.tombstones.ids) || {}).forEach(function(k) {
+    tIds[k] = local.tombstones.ids[k];
   });
-  var mergedRegistros = Object.keys(regMap).filter(function(fecha) {
-    var r = regMap[fecha];
-    var tomb = tRegistros[fecha];
+  Object.keys((remote.tombstones && remote.tombstones.ids) || {}).forEach(function(k) {
+    tIds[k] = Math.max(tIds[k] || 0, remote.tombstones.ids[k]);
+  });
+
+  // La clave es el id, no la fecha: por eso caben varios bloques el mismo dia.
+  var regMap = {};
+  (local.registros || []).forEach(function(r) { regMap[idRegistro(r)] = r; });
+  (remote.registros || []).forEach(function(r) {
+    var k = idRegistro(r);
+    var ex = regMap[k];
+    if (!ex || (r._ts || 0) > (ex._ts || 0)) regMap[k] = r;
+  });
+  var mergedRegistros = Object.keys(regMap).filter(function(k) {
+    var r = regMap[k];
     // Una lapida solo mata a un registro cuyo _ts CONOCEMOS y es mas viejo.
-    if (!tomb) return true;
-    if (!r._ts) return true;
-    return tomb < r._ts;
-  }).map(function(fecha) { return regMap[fecha]; });
+    var tomb = tIds[k];
+    if (tomb && r._ts && tomb >= r._ts) return false;
+    // Lapida vieja, por fecha: valida para lo registrado antes de este cambio.
+    var tombFecha = tRegistros[r.fecha];
+    if (tombFecha && r._ts && tombFecha >= r._ts) return false;
+    return true;
+  }).map(function(k) { return regMap[k]; });
 
   var pagMap = {};
   Object.assign(pagMap, local.pagosPeriodo || {});
@@ -1582,7 +1673,7 @@ function mergeState(local, remote) {
     pagosPeriodo: pagMap,
     fechaInicio: fechaInicioM || '',
     configTs: configTsM || 0,
-    tombstones: { registros: tRegistros, pagos: tPagos }
+    tombstones: { registros: tRegistros, pagos: tPagos, ids: tIds }
   };
 }
 
@@ -1614,9 +1705,9 @@ function aplicarEstado(merged) {
 // Firma estable de un estado: si dos firmas son iguales, no hace falta subir.
 function syncFirma(st) {
   if (!st) return '';
-  var regs = (st.registros || []).slice().sort(function(a, b) {
-    return (a.fecha < b.fecha) ? -1 : (a.fecha > b.fecha ? 1 : 0);
-  }).map(function(r) { return r.fecha + ':' + (r._ts || 0); }).join(',');
+  var regs = (st.registros || []).map(function(r) {
+    return idRegistro(r) + ':' + (r._ts || 0);
+  }).sort().join(',');
   var pags = Object.keys(st.pagosPeriodo || {}).sort().map(function(k) {
     return k + ':' + ((st.pagosPeriodo[k] && st.pagosPeriodo[k]._ts) || 0);
   }).join(',');
@@ -1626,7 +1717,10 @@ function syncFirma(st) {
   var tp = Object.keys((st.tombstones && st.tombstones.pagos) || {}).sort().map(function(k) {
     return k + ':' + st.tombstones.pagos[k];
   }).join(',');
-  return regs + '|' + pags + '|' + tr + '|' + tp + '|' + (st.fechaInicio || '') + '|' + (st.configTs || 0);
+  var ti = Object.keys((st.tombstones && st.tombstones.ids) || {}).sort().map(function(k) {
+    return k + ':' + st.tombstones.ids[k];
+  }).join(',');
+  return regs + '|' + pags + '|' + tr + '|' + tp + '|' + ti + '|' + (st.fechaInicio || '') + '|' + (st.configTs || 0);
 }
 
 // --- Empezar a compartir (crea la sala) --------------------------------------
@@ -1858,19 +1952,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const otros = colectarOtros();
     if (!fecha || !llegada) { alert('Completa la fecha y hora de llegada.'); return; }
 
-    // Si veniamos editando y cambiaron la fecha, el dia viejo hay que quitarlo:
-    // si no, quedarian dos registros.
-    if (editandoFecha && editandoFecha !== fecha) {
-      var yaExiste = registros.some(function(x) { return x.fecha === fecha; });
-      if (yaExiste && !confirm('Ya hay un registro el ' + formatearFechaLarga(fecha) +
-          '.\n\nSi segu\u00eds, ese d\u00eda queda con los datos que acab\u00e1s de escribir y se ' +
-          'elimina el del ' + formatearFechaLarga(editandoFecha) + '.\n\n\u00bfSeguir?')) return;
-      eliminarRegistro(editandoFecha);
-    }
+    // Sin id, agregarRegistro crea un bloque NUEVO aunque ese dia ya tenga otros.
+    // Con id, corrige ese bloque (y si se cambio la fecha, el bloque se mueve).
+    var datos = { fecha: fecha, llegada: llegada, salida: salida, recogido: recogido, otros: otros };
+    if (editandoId) datos.id = editandoId;
+    agregarRegistro(datos);
 
-    agregarRegistro({ fecha: fecha, llegada: llegada, salida: salida, recogido: recogido, otros: otros });
-
-    if (editandoFecha) salirModoEdicion();
+    if (editandoId) salirModoEdicion();
     else {
       document.getElementById('fecha').value = hoyStr();
       document.getElementById('llegada').value = '07:30';
@@ -1889,7 +1977,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const llegada = document.getElementById('llegada').value;
     if (!llegada) { alert('Primero ingresa la hora de llegada.'); return; }
     const otros = colectarOtros();
-    agregarRegistro({ fecha: fecha, llegada: llegada, salida: horaActualStr(), recogido: true, otros: otros });
+    // Si ese dia hay un bloque sin hora de salida, se le pone la de ahora en vez
+    // de crear otro. Es lo que hacia antes, cuando solo cabia un registro por dia.
+    var abierto = registros.filter(function(x) { return x.fecha === fecha && !x.salida; })
+                           .sort(function(a, b) { return (b.llegada || '').localeCompare(a.llegada || ''); })[0];
+    var datos = { fecha: fecha, llegada: llegada, salida: horaActualStr(), recogido: true, otros: otros };
+    if (abierto) { datos.id = idRegistro(abierto); datos.llegada = abierto.llegada; }
+    agregarRegistro(datos);
     document.getElementById('fecha').value = hoyStr();
     document.getElementById('llegada').value = '07:30';
     document.getElementById('salida').value = '';
