@@ -315,16 +315,9 @@
   </div>
 </div>
 
-<div class="card">
-  <h2>&#x1f4dc; Hist&oacute;rico de pagos</h2>
-  <div class="tabla-wrap">
-    <table>
-      <thead><tr><th>Per&iacute;odo</th><th class="text-right">Monto</th><th class="text-right">Pagado el</th></tr></thead>
-      <tbody id="tablaHistPagos"></tbody>
-    </table>
-  </div>
-  <div id="vacioHistPagos" class="vacio" style="display:none;">No hay pagos registrados.</div>
-</div>
+<!-- Historico de pagos: quitado de la vista. Cada periodo ya muestra
+     "PAGADO el ..." en su tarjeta. Los pagos siguen guardados y salen
+     en el reporte visual, el CSV y el JSON. -->
 
 <div class="card">
   <h2>&#x1f4e4; Exportar / Importar</h2>
@@ -1222,6 +1215,7 @@ function renderSaldoPendiente() {
 function renderHistorialPagos() {
   const tbody = document.getElementById('tablaHistPagos');
   const vacio = document.getElementById('vacioHistPagos');
+  if (!tbody || !vacio) return;        // la tarjeta ya no se muestra
   const entries = Object.values(pagosPeriodo).sort(function(a, b) {
     return b.fechaPago.localeCompare(a.fechaPago);
   });
