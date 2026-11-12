@@ -69,6 +69,7 @@
 }
 .editar-btn:hover { background: #fef3c7; }
 .fila-editando { background: #fffbeb !important; }
+.fila-finde { background: #fff7ed; }
 .eliminar-btn { background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 1rem; padding: 2px 6px; border-radius: 4px; }
   .eliminar-btn:hover { color: #ef4444; background: #fef2f2; }
 
@@ -141,7 +142,7 @@
   <form id="formRegistro">
     <div class="form-row">
       <div class="form-group">
-        <label for="fecha">Fecha</label>
+        <label for="fecha">Fecha <span id="diaSemanaFecha" style="font-weight:700;text-transform:capitalize;color:#2563eb;"></span></label>
         <input type="date" id="fecha" required>
       </div>
       <div class="form-group">
@@ -368,6 +369,55 @@ function formatearFechaCorta(fechaStr) {
   return d + '/' + m + '/' + y;
 }
 
+// --- Dia de la semana -------------------------------------------------------
+// OJO: hay que armar la fecha al MEDIODIA local. Con new Date('2026-11-11') el
+// navegador entiende medianoche UTC, que en Costa Rica cae el dia anterior a
+// las 6 p.m., y el dia de la semana saldria corrido.
+var DIAS_LARGOS = ['domingo','lunes','martes','mi\u00e9rcoles','jueves','viernes','s\u00e1bado'];
+var DIAS_CORTOS = ['dom','lun','mar','mi\u00e9','jue','vie','s\u00e1b'];
+var MESES_LARGOS = ['enero','febrero','marzo','abril','mayo','junio','julio',
+                    'agosto','septiembre','octubre','noviembre','diciembre'];
+
+function fechaLocal(fechaStr) {
+  if (!fechaStr) return null;
+  var d = new Date(fechaStr + 'T12:00:00');
+  return isNaN(d.getTime()) ? null : d;
+}
+function diaSemana(fechaStr) {
+  var d = fechaLocal(fechaStr);
+  return d ? DIAS_LARGOS[d.getDay()] : '';
+}
+function diaSemanaCorto(fechaStr) {
+  var d = fechaLocal(fechaStr);
+  return d ? DIAS_CORTOS[d.getDay()] : '';
+}
+function esFinDeSemana(fechaStr) {
+  var d = fechaLocal(fechaStr);
+  if (!d) return false;
+  var n = d.getDay();
+  return n === 0 || n === 6;
+}
+// "mie 11/11/2026" para las tablas, donde el espacio es poco
+function formatearFechaConDia(fechaStr) {
+  if (!fechaStr) return '-';
+  var corto = diaSemanaCorto(fechaStr);
+  var color = esFinDeSemana(fechaStr) ? '#c2410c' : '#64748b';
+  return '<span style="color:' + color + ';font-weight:600;text-transform:capitalize;">' +
+         corto + '</span> ' + formatearFechaCorta(fechaStr);
+}
+// "miercoles 11 de noviembre de 2026" para avisos y reportes
+function formatearFechaLarga(fechaStr) {
+  var d = fechaLocal(fechaStr);
+  if (!d) return '-';
+  return DIAS_LARGOS[d.getDay()] + ' ' + d.getDate() + ' de ' +
+         MESES_LARGOS[d.getMonth()] + ' de ' + d.getFullYear();
+}
+// "mie 11/11/2026" en texto plano (sin HTML), para avisos del navegador
+function fechaConDiaTexto(fechaStr) {
+  if (!fechaStr) return '-';
+  return diaSemanaCorto(fechaStr) + ' ' + formatearFechaCorta(fechaStr);
+}
+
 function hoyStr() {
   return new Date().toISOString().split('T')[0];
 }
@@ -410,7 +460,7 @@ function obtenerPeriodo(fechaStr, tipo) {
       return {
         inicio: pInicio.toISOString().split('T')[0],
         fin: pFin.toISOString().split('T')[0],
-        label: formatearFechaCorta(pInicio.toISOString().split('T')[0]) + ' al ' + formatearFechaCorta(pFin.toISOString().split('T')[0])
+        label: fechaConDiaTexto(pInicio.toISOString().split('T')[0]) + ' al ' + fechaConDiaTexto(pFin.toISOString().split('T')[0])
       };
     }
   }
@@ -423,7 +473,7 @@ function obtenerPeriodo(fechaStr, tipo) {
     return {
       inicio: inicio.toISOString().split('T')[0],
       fin: fin.toISOString().split('T')[0],
-      label: formatearFechaCorta(inicio.toISOString().split('T')[0]) + ' al ' + formatearFechaCorta(fin.toISOString().split('T')[0])
+      label: fechaConDiaTexto(inicio.toISOString().split('T')[0]) + ' al ' + fechaConDiaTexto(fin.toISOString().split('T')[0])
     };
   }
   var mes = d.getMonth();
@@ -723,7 +773,7 @@ function renderPeriodos() {
       const otrosStr = r.otros && r.otros.length
         ? r.otros.map(function(o) { return o.descripcion + ' ' + formatearMoneda(o.monto); }).join(', ')
         : '-';
-      return '<tr><td>' + formatearFechaCorta(r.fecha) + '</td>' +
+      return '<tr><td>' + fechaConDiaTexto(r.fecha) + '</td>' +
         '<td>' + formatearHora(r.llegada) + '</td>' +
         '<td>' + (r.salida ? formatearHora(r.salida) : '-') + '</td>' +
         '<td>' + (r.horas ? r.horas.toFixed(1) : '-') + '</td>' +
@@ -813,6 +863,15 @@ function resumenCorto(r) {
   return p;
 }
 
+function actualizarDiaSemanaForm() {
+  var el = document.getElementById('diaSemanaFecha');
+  var inp = document.getElementById('fecha');
+  if (!el || !inp) return;
+  var nombre = diaSemana(inp.value);
+  el.textContent = nombre ? '\u2014 ' + nombre : '';
+  el.style.color = esFinDeSemana(inp.value) ? '#c2410c' : '#2563eb';
+}
+
 function editarRegistro(fecha) {
   var r = registros.find(function(x) { return x.fecha === fecha; });
   if (!r) { alert('Ese d\u00eda ya no est\u00e1 en la lista.'); return; }
@@ -828,9 +887,10 @@ function editarRegistro(fecha) {
   cont.innerHTML = '';
   (r.otros || []).forEach(function(o) { agregarOtroForm(o.descripcion, o.monto); });
 
-  document.getElementById('bannerEdicionFecha').textContent = formatearFechaCorta(r.fecha);
+  document.getElementById('bannerEdicionFecha').textContent = formatearFechaLarga(r.fecha);
   document.getElementById('bannerEdicionOriginal').textContent =
     'Estaba: ' + resumenCorto(r) + (r.autor ? '  (lo anot\u00f3 ' + r.autor + ')' : '');
+  actualizarDiaSemanaForm();
   document.getElementById('bannerEdicion').style.display = 'block';
   document.getElementById('btnGuardarRegistro').innerHTML = '\ud83d\udcbe Guardar cambios';
   document.getElementById('btnCancelarEdicion').style.display = '';
@@ -863,6 +923,7 @@ function salirModoEdicion() {
   document.getElementById('salida').value = '';
   document.getElementById('recogido').checked = false;
   document.getElementById('otrosContainer').innerHTML = '';
+  actualizarDiaSemanaForm();
   document.querySelectorAll('#tablaEventos tr').forEach(function(tr) {
     tr.classList.remove('fila-editando');
   });
@@ -882,8 +943,9 @@ function renderEventos() {
     var otrosStr = r.otros && r.otros.length
       ? r.otros.map(function(o) { return o.descripcion + ' ' + formatearMoneda(o.monto); }).join('<br>')
       : '-';
-    return '<tr>' +
-      '<td>' + formatearFechaCorta(r.fecha) + '</td>' +
+    var clsFin = esFinDeSemana(r.fecha) ? ' class="fila-finde"' : '';
+    return '<tr' + clsFin + '>' +
+      '<td style="white-space:nowrap;">' + formatearFechaConDia(r.fecha) + '</td>' +
       '<td>' + formatearHora(r.llegada) + '</td>' +
       '<td>' + (r.salida ? formatearHora(r.salida) : '-') + '</td>' +
       '<td>' + (r.horas ? r.horas.toFixed(1) : '-') + '</td>' +
@@ -1177,7 +1239,7 @@ function generarReporte() {
     var otrosStr = r.otros && r.otros.length
       ? r.otros.map(function(o) { return o.descripcion + ' ' + formatearMoneda(o.monto); }).join(', ')
       : '-';
-    html += '<tr><td>' + formatearFechaCorta(r.fecha) + '</td>' +
+    html += '<tr><td>' + fechaConDiaTexto(r.fecha) + '</td>' +
       '<td>' + formatearHora(r.llegada) + '</td>' +
       '<td>' + (r.salida ? formatearHora(r.salida) : '-') + '</td>' +
       '<td>' + (r.horas ? r.horas.toFixed(1) : '-') + '</td>' +
@@ -1784,6 +1846,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
   document.getElementById('fecha').value = hoyStr();
   document.getElementById('llegada').value = '07:30';
+  actualizarDiaSemanaForm();
+  document.getElementById('fecha').addEventListener('change', actualizarDiaSemanaForm);
 
   document.getElementById('formRegistro').addEventListener('submit', function(e) {
     e.preventDefault();
@@ -1798,9 +1862,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // si no, quedarian dos registros.
     if (editandoFecha && editandoFecha !== fecha) {
       var yaExiste = registros.some(function(x) { return x.fecha === fecha; });
-      if (yaExiste && !confirm('Ya hay un registro el ' + formatearFechaCorta(fecha) +
+      if (yaExiste && !confirm('Ya hay un registro el ' + formatearFechaLarga(fecha) +
           '.\n\nSi segu\u00eds, ese d\u00eda queda con los datos que acab\u00e1s de escribir y se ' +
-          'elimina el del ' + formatearFechaCorta(editandoFecha) + '.\n\n\u00bfSeguir?')) return;
+          'elimina el del ' + formatearFechaLarga(editandoFecha) + '.\n\n\u00bfSeguir?')) return;
       eliminarRegistro(editandoFecha);
     }
 
@@ -1813,6 +1877,8 @@ document.addEventListener('DOMContentLoaded', function() {
       document.getElementById('salida').value = '';
       document.getElementById('recogido').checked = false;
       document.getElementById('otrosContainer').innerHTML = '';
+      actualizarDiaSemanaForm();
+  actualizarDiaSemanaForm();
     }
   });
 
@@ -1829,6 +1895,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('salida').value = '';
     document.getElementById('recogido').checked = false;
     document.getElementById('otrosContainer').innerHTML = '';
+  actualizarDiaSemanaForm();
   });
 
   document.getElementById('btnAgregarOtro').addEventListener('click', function() {
